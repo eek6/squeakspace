@@ -1,0 +1,381 @@
+This is the protocol spec.
+
+
+
+complain.wsgi
+
+group-config.wsgi
+
+group-quota.wsgi
+
+  POST -- chenage group quota.
+
+  urlencoded
+
+  q -- json_array
+    'CHANGE_GROUP_QUOTA'
+    timestamp
+    node_name
+    group_id
+    owner_id
+    new_size
+    when_space_exhausted
+  public_key_hash
+  signature
+
+  GET -- read group quota
+
+  urlencoded
+
+  q -- json_array
+    'READ_GROUP_QUOTA'
+    timestamp
+    node_name
+    group_id
+    owner_id
+  read_signature
+  proof_of_work
+
+
+group.wsgi
+
+  POST -- create a group
+
+  urlencoded
+
+  q -- json_array
+    'CREATE_GROUP'
+    timestamp - nonce
+    node_name
+    group_id -- unique name under owner_id
+    owner_id
+    post_access --
+    read_access -- access allow, block, proof_of_work/{args...}
+    delete_access --
+    posting_key_type
+    posting_pub_key -- null or a public key
+    reading_key_type
+    reading_pub_key --
+    delete_key_type
+    delete_pub_key --
+    quota_allocated
+    when_space_exhausted -- block, free_oldest
+
+  public_key_hash -- key belongs to owner_id
+  signature - signs q with key, public_key_hash
+
+
+  GET -- query status of a group
+
+  urlencoded
+
+  q -- json_array
+    'READ_GROUP'
+    timestamp - nonce
+    node_name
+    group_id
+    owner_id
+
+  public_key_hash -- key belongs to owner_id
+  signature -- signs q with public_key_hash key.
+
+
+  DELETE -- delete a group
+
+  urlencoded
+
+  q -- json_array
+    'DELETE_GROUP'
+    timestamp - nonce
+    node_name
+    group_id
+    owner_id
+
+  public_key_hash -- belongs to owner_id
+  signature -- signs q with key for public_key_hash
+
+
+last-message-time.wsgi
+
+  GET -- view the timestamp of the most recent message for user.
+         Only the timestamp is returned. This intended for polling.
+         
+  urlencoded
+
+  q -- json_array
+    'READ_LAST_MESSAGE_TIME'
+    timestamp
+    node_name
+    user_id
+  public_key_hash -- belongs to user_id
+  signature - signs q with key, public_key_hash
+
+
+last-post-time.wsgi
+
+  GET -- get timestamp of most recent post in group.
+
+  urlencoded 
+
+  q -- json_array
+    'READ_LAST_POST_TIME'
+    timestamp
+    node_name
+    group_id
+    owner_id
+  read_signature
+  proof_of_work
+
+message-list.wsgi
+
+  GET -- view mail headers in time range
+
+  urlencoded
+
+  q -- json_array
+    'READ_MESSAGE_LIST'
+    timestamp -- nonce
+    node_name
+    user_id
+    start_time -- or null
+    end_time -- or null
+    max_records -- or null
+    order - desc or asc. Default asc.
+  public_key_hash
+  signature - signs q with key, public_key_hash 
+
+
+message-quota.wsgi
+
+  POST -- change mail quota
+
+  urlencoded
+
+  q -- json_array
+    'CHANGE_MESSAGE_QUOTA'
+    timestamp
+    node_name
+    user_id
+    new_size
+    when_space_exhausted
+  public_key_hash
+  signature
+
+
+  GET -- view mail quota
+
+  urlencoded
+
+  q -- json_array
+    'READ_MESSAGE_QUOTA'
+    timestamp
+    node_name
+    user_id
+  public_key_hash
+  signature
+
+
+message.wsgi
+
+  GET -- view mail
+
+    urlencoded
+
+    q -- json_array
+      'READ_MESSAGE'
+      timestamp - nonce
+      node_name
+      user_id
+      message_id
+
+    public_key_hash -- belongs to user_id
+    signature -- signs q with key, public_key_hash
+
+
+  POST  -- send mail
+
+    urlencoded
+
+    q - json_array
+      'SEND_MESSAGE'
+      timestamp - nonce
+      node_name
+      to_user - Not Null
+      to_user_key_hash - only to inform the client
+      from_user - only needed if signatures are required for spam
+      from_user_key_hash - see above
+      message_hash - hash(message)
+
+    message_id - hash(q)
+    message 
+    from_signature - signs message_id with key, from_user_key_hash, or null
+    proof_of_work - proves work for message_id.
+
+
+  DELETE -- delete mail
+
+    urlencoded
+
+    q - json_array
+      'DELETE_MESSAGE'
+      timestamp - nonce
+      node_name
+      user_id
+      message_id 
+    public_key_hash -- belongs to user_id
+    signature -- signs q with key from public_key_hash
+
+node.wsgi
+
+post-list.wsgi
+
+  GET -- find post records in time intervals.
+
+  urlencoded
+
+  q -- json_array
+    'READ_POST_LIST'
+    timestamp -- nonce
+    node_name
+    group_id
+    owner_id
+    start_time
+    end_time -- if null, current day
+    max_records -- 
+    order -- desc or asc. default asc
+  read_signature -- signs q with group reading key
+  proof_of_work -- proves work for q
+
+
+post.wsgi
+
+  POST -- make a post to a group
+
+  urlencoded
+
+  q -- json_array
+    'MAKE_POST'
+    timestamp -- nonce
+    node_name
+    group_id
+    owner_id
+    data_hash -- hash(data)
+  post_id -- hash(q)
+  data
+  post_signature - signs q with group posting key
+  proof_of_work - proves work for post_id
+
+
+  GET -- download a post
+
+  urlencoded
+
+  q -- json_array
+    'READ_POST'
+    timestamp -- nonce
+    node_name
+    group_id
+    owner_id
+    post_id
+  read_signature -- signs q with the reading key
+  proof_of_work -- proves work for q.
+
+
+  DELETE -- delete a post from a group
+
+  urlencoded
+
+  q -- json_array
+    'DELETE_POST'
+    timestamp
+    node_name
+    group_id
+    owner_id
+    post_id
+  delete_signature -- signs q with the delete key
+  proof_of_work -- proves work for q.
+
+
+user-quota.wsgi
+
+  POST -- change user quota
+
+  urlencoded
+
+  q -- json_array
+    'CHANGE_USER_QUOTA'
+    timestamp
+    node_name
+    user_id
+    new_size
+    user_class
+    auth_token
+  public_key_hash
+  signature
+
+
+  GET -- read user quota.
+
+  urlencoded
+
+  q -- json_array
+    'READ_USER_QUOTA'
+    timestamp
+    node_name
+    user_id
+  public_key_hash
+  signature
+
+user.wsgi
+
+  POST -- registration. There is no user authentication here since the identity has to yet to be established.
+
+  urlencoded
+
+  user_id -- must be unique
+  key_type
+  public_key -- 
+  public_key_hash -- hash(public_key)
+  revoke_date -- date
+  default_message_access -- access
+  when_mail_exhausted -- free_oldest, block
+  quota_size -- bytes, number
+  mail_quota_size -- bytes, number, less than quota_size
+  user_class -- some kind of value? up to the node.
+  auth_token -- some kind of value, up to the node. One time use.
+
+
+  GET -- user account status
+
+  urlencoded
+
+  q -- json_array
+    'READ_USER'
+    timestamp -- nonce
+    node_name
+    user_id
+
+  public_key_hash -- belongs to user_id
+  signature -- signs q
+
+
+  DELETE -- delete user account
+
+  urlencoded
+
+  q -- json_array
+    'DELETE_USER'
+    timestamp
+    node_name
+    user_id
+
+  public_key_hash
+  signature
+
+version.wsgi
+
+  GET -- get version
+
+  no parameters
+
+

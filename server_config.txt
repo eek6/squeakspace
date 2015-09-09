@@ -1,0 +1,33 @@
+
+Add these if you are using mod_wsgi with apache.
+Change {rootdir} to point the root.
+
+
+
+
+
+WSGIPythonPath {rootdir}/squeakspace/server/lib:{rootdir}/squeakspace/common/lib:{rootdir}/squeakspace/lib:{rootdir}/squeakspace/lib/gnupg
+
+
+
+
+WSGIScriptAlias /complain {rootdir}/squeakspace/server/scripts/complain.wsgi
+WSGIScriptAlias /group-config {rootdir}/squeakspace/server/scripts/group-config.wsgi
+WSGIScriptAlias /group-quota {rootdir}/squeakspace/server/scripts/group-quota.wsgi
+WSGIScriptAlias /group {rootdir}/squeakspace/server/scripts/group.wsgi
+WSGIScriptAlias /last-message-time {rootdir}/squeakspace/server/scripts/last-message-time.wsgi
+WSGIScriptAlias /last-post-time {rootdir}/squeakspace/server/scripts/last-post-time.wsgi
+WSGIScriptAlias /message-access {rootdir}/squeakspace/server/scripts/message-access.wsgi
+WSGIScriptAlias /message-list {rootdir}/squeakspace/server/scripts/message-list.wsgi
+WSGIScriptAlias /message-quota {rootdir}/squeakspace/server/scripts/message-quota.wsgi
+WSGIScriptAlias /message {rootdir}/squeakspace/server/scripts/message.wsgi
+WSGIScriptAlias /node {rootdir}/squeakspace/server/scripts/node.wsgi
+WSGIScriptAlias /post-list {rootdir}/squeakspace/server/scripts/post-list.wsgi
+WSGIScriptAlias /post {rootdir}/squeakspace/server/scripts/post.wsgi
+WSGIScriptAlias /user-config {rootdir}/squeakspace/server/scripts/user-config.wsgi
+WSGIScriptAlias /user-quota {rootdir}/squeakspace/server/scripts/user-quota.wsgi
+WSGIScriptAlias /user {rootdir}/squeakspace/server/scripts/user.wsgi
+WSGIScriptAlias /version {rootdir}/squeakspace/server/scripts/version.wsgi
+
+# Below are for debugging. Don't enable if facing the internet.
+WSGIScriptAlias /debug {rootdir}/squeakspace/server/scripts/debug.wsgi

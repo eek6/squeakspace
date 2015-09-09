@@ -1,0 +1,36 @@
+Metadata-Version: 1.1
+Name: gnupg
+Version: 2.0.2
+Summary: A Python wrapper for GnuPG
+Home-page: https://github.com/isislovecruft/python-gnupg
+Author: Isis Agora Lovecruft
+Author-email: isis@patternsinthevoid.net
+License: GPLv3+
+Download-URL: https://github.com/isislovecruft/python-gnupg/archive/master.zip
+Description: This module allows easy access to GnuPG's key management, encryption and signature functionality from Python programs, by interacting with GnuPG through file descriptors. Input arguments are strictly checked and sanitised, and therefore this module should be safe to use in networked applications requiring direct user input. It is intended for use on Windows, MacOS X, BSD, or Linux, with Python 2.6, Python 2.7, Python 3.3, Python 3.4, or PyPy.
+        
+Platform: Linux
+Platform: BSD
+Platform: OSX
+Platform: Windows
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: System Administrators
+Classifier: License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)
+Classifier: Operating System :: Android
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: POSIX :: BSD
+Classifier: Operating System :: POSIX :: Linux
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 2.6
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3.3
+Classifier: Programming Language :: Python :: 3.4
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Classifier: Topic :: Security :: Cryptography
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Topic :: Utilities
