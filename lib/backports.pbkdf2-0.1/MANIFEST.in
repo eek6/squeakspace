@@ -1,0 +1,6 @@
+include setup.py
+include README.txt CHANGES.txt LICENSE
+include MANIFEST.in
+include setup.py setup.cfg
+include tests.py
+recursive-include backports *.c *.py

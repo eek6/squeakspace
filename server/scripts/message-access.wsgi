@@ -11,7 +11,7 @@ def post_handler(environ):
     timestamp = ht.convert_int(ht.get_required(query, 'timestamp'), 'timestamp')
     node_name = ht.get_required(query, 'node_name')
     user_id = ht.get_required(query, 'user_id')
-    from_key_hash = ht.get_required(query, 'from_key_hash')
+    from_user_key_hash = ht.get_optional(query, 'from_user_key_hash')
     access = ht.get_required(query, 'access')
     public_key_hash = ht.get_required(query, 'public_key_hash')
     signature = ht.get_required(query, 'signature')
@@ -20,7 +20,7 @@ def post_handler(environ):
     try:
         c = db.cursor(conn)
         db.set_message_access(c,
-                timestamp, node_name, user_id, from_key_hash, access,
+                timestamp, node_name, user_id, from_user_key_hash, access,
                 public_key_hash, signature)
         db.commit(conn)
 
@@ -40,7 +40,7 @@ def get_handler(environ):
     timestamp = ht.convert_int(ht.get_required(query, 'timestamp'), 'timestamp')
     node_name = ht.get_required(query, 'node_name')
     user_id = ht.get_required(query, 'user_id')
-    from_key_hash = ht.get_required(query, 'from_key_hash')
+    from_user_key_hash = ht.get_optional(query, 'from_user_key_hash')
     public_key_hash = ht.get_required(query, 'public_key_hash')
     signature = ht.get_required(query, 'signature')
     
@@ -48,7 +48,7 @@ def get_handler(environ):
     try:
         c = db.cursor(conn)
         message_access = db.read_message_access(c,
-                timestamp, node_name, user_id, from_key_hash, public_key_hash, signature)
+                timestamp, node_name, user_id, from_user_key_hash, public_key_hash, signature)
 
         raise ht.ok_json({'status' : 'ok', 'message_access' : message_access})
 
@@ -65,7 +65,7 @@ def delete_handler(environ):
     timestamp = ht.convert_int(ht.get_required(query, 'timestamp'), 'timestamp')
     node_name = ht.get_required(query, 'node_name')
     user_id = ht.get_required(query, 'user_id')
-    from_key_hash = ht.get_required(query, 'from_key_hash')
+    from_user_key_hash = ht.get_required(query, 'from_user_key_hash')
     public_key_hash = ht.get_required(query, 'public_key_hash')
     signature = ht.get_required(query, 'signature')
     
@@ -73,7 +73,7 @@ def delete_handler(environ):
     try:
         c = db.cursor(conn)
         db.delete_message_access(c,
-                timestamp, node_name, user_id, from_key_hash, public_key_hash, signature)
+                timestamp, node_name, user_id, from_user_key_hash, public_key_hash, signature)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})

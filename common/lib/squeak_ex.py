@@ -7,6 +7,7 @@ class SqueakStatusCodes:
     conflict = 'conflict'
     not_found = 'not_found'
     forbidden = 'forbidden'
+    server_error = 'server_error'
 
 
 class SqueakException(Exception):
@@ -531,3 +532,15 @@ class BadNodeNameException(SqueakException):
                 'reason' : 'bad node name',
                 'given_node_name' : self.given_node_name,
                 'node_name' : self.node_name}
+
+class BadGroupKeyUseException(SqueakException):
+    type = SqueakStatusCodes.bad_request
+
+    def __init__(self, use):
+        self.use = use
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type,
+                'reason' : 'bad group key use',
+                'use' : self.use}

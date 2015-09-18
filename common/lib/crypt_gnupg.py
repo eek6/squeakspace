@@ -79,6 +79,8 @@ class CryptGnuPG:
         debug_print ('assert_public_key delete_keys', temp.status)
         assert(temp.status == 'ok')
     
+    def assert_passphrase(self, private_key, passphrase=None):
+        assert(False)
     
     def encrypt(self, public_key, data):
         debug_print('encrypt', public_key, data)

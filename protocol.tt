@@ -6,6 +6,74 @@ complain.wsgi
 
 group-config.wsgi
 
+group-access.wsgi
+
+  POST -- change group access
+
+  urlencoded
+
+  q -- json_array
+    'CHANGE_GROUP_ACCESS'
+    timestamp
+    node_name
+    group_id
+    owner_id
+    use -- post, read, delete
+    access
+
+  public_key_hash -- belongs to owner_id
+  signature
+
+
+  GET -- read group access
+
+  q -- json_array
+    'READ_GROUP_ACCESS'
+    timestamp
+    node_name
+    group_id
+    owner_id
+    use -- post, read, delete
+
+  signature
+    
+
+group-key.wsgi
+
+  POST -- change group key
+
+  urlencoded
+
+  q -- json_array
+    'CHANGE_GROUP_KEY'
+    timestamp
+    node_name
+    group_id
+    owner_id
+    key_use -- post, read, delete
+    key_type
+    public_key
+
+  public_key_hash -- belongs to owner_id
+  signature -- signs q with key from public_key_hash
+
+
+  GET -- read group key
+
+  urlencoded
+
+  q -- json_array
+    'READ_GROUP_KEY'
+    timestamp
+    node_name
+    group_id
+    owner_id
+    key_use -- post, read, delete
+
+  public_key_hash -- belongs to owner_id
+  signature -- signs q.
+
+
 group-quota.wsgi
 
   POST -- chenage group quota.
@@ -125,6 +193,76 @@ last-post-time.wsgi
     owner_id
   read_signature
   proof_of_work
+
+
+# This is done by another user to see what access they
+# have to your mail.
+query-message-access.wsgi
+
+  GET -- query message access
+
+  urlencoded
+
+  q -- json_array
+    'QUERY_MESSAGE_ACCESS'
+    timestamp
+    node_name
+    to_user
+    from_user
+    from_user_key_hash
+
+  from_user_key_sig -- signs q with from_user_key
+
+
+# manage your own access list
+message-access.wsgi
+
+  GET -- read message access
+
+  urlencoded
+
+  q -- json_array
+    'READ_MESSAGE_ACCESS'
+    timestamp
+    node_name
+    user_id
+    from_user_key_hash
+
+  public_key_hash -- belongs to to_user
+  signature -- signs q with public_key_hash
+  
+
+  POST -- set message access
+
+  urlencoded
+
+  q -- json_array
+    'SET_MESSAGE_ACCESS'
+    timestamp
+    node_name
+    user_id
+    from_user_key_hash
+    access
+
+  public_key_hash -- belongs to to_user
+  signature -- signs q with public_key_hash
+
+
+  DELETE -- delete message access
+
+  urlencoded
+
+  q -- json_array
+    'DELETE_MESSAGE_ACCESS'
+    timestamp
+    node_name
+    user_id
+    from_user_key_hash
+
+  public_key_hash -- belongs to to_user
+  signature -- signs q with public_key_hash
+
+
 
 message-list.wsgi
 
@@ -332,6 +470,7 @@ user.wsgi
 
   urlencoded
 
+  node_name
   user_id -- must be unique
   key_type
   public_key -- 
@@ -376,6 +515,6 @@ version.wsgi
 
   GET -- get version
 
-  no parameters
+  node_name
 
 

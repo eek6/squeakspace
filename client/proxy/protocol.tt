@@ -1,0 +1,789 @@
+This is the local client protocol spec.
+the local scripts are for requests that
+configure the user's local storage,
+and scripts under proxy send requests
+to a node.
+
+
+
+-- config
+
+local/crypt/encrypt.wsgi
+
+  POST -- generate ciphertext
+  cookies: user_id, session_id
+
+  urlencoded
+
+  public_key_hash
+  plaintext
+
+local/crypt/decrypt.wsgi
+
+  POST -- get plaintext from ciphertext
+  cookies: user_id, session_id
+
+  urlencoded
+
+  public_key_hash
+  ciphertext
+  passphrase
+
+local/crypt/verify_signature.wsgi
+
+  POST -- verify signature
+  cookies: user_id, session_id
+
+  urlencoded
+
+  public_key_hash
+  data
+  signature
+
+local/crypt/sign.wsgi
+
+  POST -- generate signature
+  cookies: user_id, session_id
+
+  urlencoded
+
+  public_key_hash
+  data 
+  passphrase
+
+
+
+
+local/public-key.wsgi
+
+  GET -- retrieve public key 
+  cookies: user_id, session_id
+
+  urlencoded
+
+  public_key_hash
+
+
+  DELETE -- delete public key
+  cookies: user_id, session_id
+
+  urlencoded
+
+  public_key_hash
+
+
+  POST -- import public key
+  cookies: user_id, session_id
+
+  urlencoded
+
+  key_type
+  public_key
+  revoke_date
+
+
+local/private-key.wsgi
+
+  GET -- retrieve private key
+  cookies: user_id, session_id
+
+  urlencoded
+
+  public_key_hash
+
+
+  DELETE -- delete a private key
+  cookies: user_id, session_id
+
+  urlencoded
+
+  public_key_hash
+
+
+  POST -- import a public key
+  cookies: user_id, session_id
+
+  urlencoded
+
+  key_type
+  public_key
+  private_key
+  revoke_date
+
+
+local/gen-key.wsgi
+
+  POST -- generate a key pair
+  cookies: user_id, session_id
+
+  urlencoded
+
+  key_type
+  key_parameters -- json dict
+  revoke_date
+  passphrase -- or null
+
+
+local/group-key.wsgi
+
+  GET -- retrieve some information about a group key.
+  cookies: user_id, session_id
+
+  urlencoded
+  
+  group_id
+  owner_id
+  key_use
+
+
+  DELETE -- delete a group key
+  cookies: user_id, session_id
+
+  urlencoded
+  
+  group_id
+  owner_id
+  key_use
+
+
+  POST -- 
+  cookies: user_id, session_id
+
+  urlencoded
+
+  group_id
+  owner_id
+  key_use
+  public_key_hash
+
+
+local/list-public-keys.wsgi
+
+  GET -- list all public key hashes
+  cookies: user_id, session_id
+
+local/list-private-keys.wsgi
+
+  GET -- list all private key hashes
+  cookies: user_id, session_id
+
+local/list-user-keys.wsgi
+
+  GET -- list keys designated for use as user keys
+  cookies: user_id, session_id
+
+local/list-group-keys.wsgi
+
+  GET -- list key hashes used for groups.
+  cookies: user_id, session_id
+
+local/list-other-user-keys.wsgi
+
+  GET -- lists keys belonging to other users
+  cookies: user_id, session_id
+
+
+local/user-key.wsgi
+
+  GET -- get some data about a user key.
+  cookies: user_id, session_id
+
+  urlencoded
+
+  public_key_hash
+
+
+  DELETE -- delete a user key designation.
+  cookies: user_id, session_id
+
+  urlencoded
+
+  public_key_hash
+
+
+  POST -- designate a private key of this user.
+  cookies: user_id, session_id
+
+  urlencoded
+
+  public_key_hash
+
+
+local/other-user-key.wsgi
+
+  GET -- get a public key of another user
+  cookies: user_id, session_id
+
+  urlencoded
+
+  other_user_id
+  public_key_hash
+
+
+  DELETE -- delete a public key of another user
+  cookies: user_id, session_id
+
+  urlencoded
+
+  other_user_id
+  public_key_hash
+
+
+  POST --
+  cookies: user_id, session_id
+
+  urlencoded
+
+  other_user_id
+  public_key_hash
+  trust_score
+
+
+local/node-addr.wsgi
+
+  GET -- get's the address of a node
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+
+
+  POST -- post a node address
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  url
+
+
+  DELETE -- remove a node address entry
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+
+
+local/group-access.wsgi
+
+  GET -- get the group access
+  cookies: user_id, session_id
+
+  urlencoded
+
+  group_id
+  owner_id
+  use
+
+
+  POST -- sets the group access
+  cookies: user_id, session_id
+
+  group_id
+  owner_id
+  use
+  access
+  timestamp
+
+
+  DELETE -- delete the group access
+  cookies: user_id, session_id
+
+  urlencoded
+
+  group_id
+  owner_id
+  use
+
+
+local/message-access.wsgi
+
+  GET -- gets the local message-access
+  cookies: user_id, session_id
+
+  urlencoded
+
+  to_user
+  from_user_key_hash
+
+
+  POST -- sets the local message-access
+  cookies: user_id, session_id
+
+  urlencoded
+
+  to_user
+  from_user_key_hash
+  access
+  timestamp
+
+
+  DELETE -- deletes the local message-access
+  cookies: user_id, session_id
+
+  urlencoded
+
+  to_user
+  from_user_key_hash
+
+
+local/password.wsgi
+
+  POST -- sets the user's password
+  cookies: user_id, session_id
+
+  method -- hash or passphrase
+  password -- present if method == hash
+  public_key_hash -- present if method == passphrase
+
+
+  GET -- gets information about user's password
+  cookies: user_id, session_id
+
+
+
+local/login.wsgi
+
+  POST -- gets the session_id
+
+  user_id
+  password
+
+
+
+local/sign-out.wsgi
+
+  GET -- sign out.
+  cookies: user_id, session_id
+
+
+
+local/user.wsgi
+
+  POST -- creates local user and gets session_id
+
+  user_id -- unique
+  password -- or null.
+
+
+  DELETE -- deletes local account
+  cookies: user_id, session_id
+
+
+
+local/version.wsgi
+
+  GET -- get the version of the local proxy
+
+  no parameters
+
+
+-- Node.
+
+proxy/complain.wsgi
+
+proxy/group-access.wsgi
+
+  POST -- change group access
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+  use -- post, read, delete
+  access
+  public_key_hash 
+  passphrase -- for public_key or null
+
+
+  GET -- read group access
+  cookies: user_id, session_id
+
+  node_name
+  group_id
+  owner_id
+  use -- post, read, delete
+  passphrase -- for group key corresponding to use.
+ 
+
+proxy/group-key.wsgi
+
+  POST -- change group key
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+  key_use
+  group_key_hash
+  public_key_hash
+  passphrase
+
+
+  GET -- read group key
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+  key_use
+  public_key_hash
+  passphrase
+
+
+proxy/group-config.wsgi
+
+proxy/group-quota.wsgi
+
+  POST -- change group quota.
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+  new_size
+  when_space_exhausted
+  public_key_hash
+  passphrase -- for public_key_hash, or null
+
+  GET -- read group quota
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+  owner_id
+  passphrase -- for read key, or null
+
+
+proxy/group.wsgi
+
+  POST -- create a group
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id -- unique name under owner_id
+  -- accesses are set up with local/group-access
+  -- the group keys are setup using local/group-key
+  quota_allocated
+  when_space_exhausted -- block, free_oldest
+
+  public_key_hash -- key belongs to owner_id
+  passphrase -- for public_key_hash, or null
+
+
+  GET -- query status of a group
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+
+  public_key_hash -- key belongs to owner_id
+  passphrase -- for public_key_hash, or null
+
+
+  DELETE -- delete a group
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+
+  public_key_hash -- belongs to owner_id
+  passphrase -- for public_key_hash, or null
+
+
+proxy/last-message-time.wsgi
+
+  GET -- view the timestamp of the most recent message for user.
+         Only the timestamp is returned. This intended for polling.
+  cookies: user_id, session_id
+         
+  urlencoded
+
+  node_name
+  public_key_hash -- belongs to user_id
+  passphrase -- for public_key_hash, or null
+
+
+proxy/last-post-time.wsgi
+
+  GET -- get timestamp of most recent post in group.
+  cookies: user_id, session_id
+
+  urlencoded 
+
+  node_name
+  group_id
+  owner_id
+  passphrase -- for read key, or null
+
+
+proxy/query-message-access.wsgi
+
+  GET -- query message access
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  to_user
+  from_user_key_hash
+  passphrase -- for from_user_key or null
+
+
+proxy/message-access.wsgi
+
+  GET -- read message access
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  from_user_key_hash
+  public_key_hash
+  passphrase -- for public_key or null
+  
+
+  POST -- set message access
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  from_user_key_hash
+  access
+  public_key_hash -- belongs to user_id
+  passphrase -- for public_key_hash or null
+
+
+  DELETE -- delete message access
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  from_user_key_hash
+  public_key_hash -- belongs to user_id
+  passphrase -- for public_key_hash or null.
+
+
+proxy/message-list.wsgi
+
+  GET -- view mail headers in time range
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  start_time -- or null
+  end_time -- or null
+  max_records -- or null
+  order - desc or asc. Default asc.
+
+  public_key_hash
+  passphrase -- for public_key_hash, or null
+
+
+proxy/message-quota.wsgi
+
+  POST -- change mail quota
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  new_size
+  when_space_exhausted
+  public_key_hash
+  passphrase -- for public_key_hash, or null
+
+
+  GET -- view mail quota
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  public_key_hash
+  passphrase -- for public_key_hash, or null
+
+
+
+proxy/message.wsgi
+
+  GET -- view mail
+  cookies: user_id, session_id
+
+    urlencoded
+
+    node_name
+    message_id
+
+    public_key_hash -- belongs to user_id
+    passphrase -- for public_key_hash, or null
+
+
+  POST  -- send mail
+  cookies: user_id, session_id
+
+    urlencoded
+
+    node_name
+    to_user - Not Null
+    to_user_key_hash - only to inform the client
+    from_user_key_hash - see above
+    message 
+    passphrase -- for from_user_key_hash, or null
+
+
+  DELETE -- delete mail
+  cookies: user_id, session_id
+
+    urlencoded
+
+    node_name
+    message_id 
+
+    public_key_hash -- belongs to user_id
+    passphrase -- for public_key_hash, or null
+
+proxy/node.wsgi
+
+proxy/post-list.wsgi
+
+  GET -- find post records in time intervals.
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+  owner_id
+  start_time
+  end_time -- if null, current day
+  max_records -- 
+  order -- desc or asc. default asc
+  passphrase -- for read key, or null
+
+
+proxy/post.wsgi
+
+  POST -- make a post to a group
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+  owner_id
+  data
+  passphrase -- for post key, or null
+
+
+  GET -- download a post
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+  owner_id
+  post_id
+  passphrase -- for read key, or null
+
+
+  DELETE -- delete a post from a group
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+  owner_id
+  post_id
+  passphrase -- for delete key, or null
+
+
+proxy/user-quota.wsgi
+
+  POST -- change user quota
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  new_size
+  user_class
+  auth_token
+  public_key_hash
+  passphrase - for public_key_hash or null
+
+
+  GET -- read user quota.
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  public_key_hash
+  passphrase - for public_key_hash or null
+
+proxy/user.wsgi
+
+  POST -- registration. There is no user authentication here since the identity has to yet to be established.
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  public_key_hash -- generated using gen-user-key or user-key.
+  default_message_access -- access
+  when_mail_exhausted -- free_oldest, block
+  quota_size -- bytes, number
+  mail_quota_size -- bytes, number, less than quota_size
+  user_class -- some kind of value? up to the node.
+  auth_token -- some kind of value, up to the node. One time use.
+
+
+  GET -- user account status
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+
+  public_key_hash -- belongs to user_id
+  passphrase - for public_key_hash or null
+
+
+  DELETE -- delete user account
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+
+  public_key_hash
+  passphrase - for public_key_hash or null
+
+proxy/version.wsgi
+
+  GET -- get version
+  cookies: user_id, session_id -- The user_id is actually needed here to resolve the node_name
+
+  node_name
+
+

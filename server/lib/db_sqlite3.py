@@ -1,5 +1,6 @@
 import sqlite3
 
+import config_proto
 import config
 import squeak_ex as ex
 import util as ut
@@ -444,7 +445,7 @@ def remove_user(c, user_id):
     remove_message_accesses(c, user_id)
     remove_messages_to_user(c, user_id)
 
-    for (group_id) in c.execute('''SELECT group_id FROM groups WHERE owner_id=?''', (user_id,)):
+    for (group_id,) in c.execute('''SELECT group_id FROM groups WHERE owner_id=?''', (user_id,)):
         remove_group(c, group_id, user_id)
 
     c.execute('''SELECT user_quota_id, mail_quota_id FROM users WHERE user_id=? LIMIT 1''', (user_id,))
@@ -454,7 +455,7 @@ def remove_user(c, user_id):
     remove_user_raw(c, user_id)
 
 
-def create_user(c, user_id, key_type,
+def create_user(c, node_name, user_id, key_type,
                 public_key, public_key_hash, revoke_date,
                 default_message_access, when_mail_exhausted,
                 parent_quota, quota_size, mail_quota_size):
@@ -467,6 +468,8 @@ def create_user(c, user_id, key_type,
 
     ut.assert_non_neg(quota_size, 'quota_size')
     ut.assert_non_neg(mail_quota_size, 'mail_quota_size')
+
+    ut.assert_node_name(node_name, config.node_name)
 
     if revoke_date != None:
         ut.assert_timestamp(revoke_date, 'revoke_date')
@@ -706,6 +709,19 @@ def remove_message_access(c, user_id, from_key_hash, quota_id):
     remove_message_access_raw(c, user_id, from_key_hash)
 
 
+def set_default_message_access(c, user_id, access):
+
+    c.execute('UPDATE users SET default_message_access=? WHERE user_id=?', (access, user_id))
+
+def get_default_message_access(c, user_id):
+
+    c.execute('SELECT default_message_access FROM users WHERE user_id=?', (user_id,))
+    row = c.fetchone()
+    assert(row != None)
+    return row[0]
+
+
+# if from_key_hash is none, the default message access is set.
 def set_message_access(c, timestamp, node_name, user_id, from_key_hash, access, public_key_hash, signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
@@ -717,63 +733,73 @@ def set_message_access(c, timestamp, node_name, user_id, from_key_hash, access, 
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
 
-    message_access = load_message_access(c, user_id, from_key_hash)
-
-    if message_access == None:
-        c.execute('SELECT user_quota_id FROM users WHERE user_id=?', (user_id,))
-        user_row = c.fetchone()
-
-        if user_row == None:
-            raise ex.UnknownUserException(user_id, 'user_id')
-
-        (user_quota_id,) = user_row
-
-        row = (user_id, from_key_hash, access)
-        add_message_access(c, row, user_quota_id)
+    if from_key_hash == None:
+        set_default_message_access(c, user_id, access)
 
     else:
-        (user_id, from_key_hash, old_access) = message_access
-        if old_access != access:
-            c.execute('UPDATE message_access SET access=? WHERE user_id=? AND from_key_hash=?',
-                      (access, user_id, from_key_hash))
+        message_access = load_message_access(c, user_id, from_key_hash)
+    
+        if message_access == None:
+            c.execute('SELECT user_quota_id FROM users WHERE user_id=?', (user_id,))
+            user_row = c.fetchone()
+    
+            if user_row == None:
+                raise ex.UnknownUserException(user_id, 'user_id')
+    
+            (user_quota_id,) = user_row
+    
+            row = (user_id, from_key_hash, access)
+            add_message_access(c, row, user_quota_id)
+    
+        else:
+            (user_id, from_key_hash, old_access) = message_access
+            if old_access != access:
+                c.execute('UPDATE message_access SET access=? WHERE user_id=? AND from_key_hash=?',
+                          (access, user_id, from_key_hash))
 
 
-def read_message_access(c, timestamp, node_name, user_id, from_key_hash, public_key_hash, signature):
+def read_message_access(c, timestamp, node_name, user_id, from_user_key_hash, public_key_hash, signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
     ut.assert_node_name(node_name, config.node_name)
 
     request_string = ut.serialize_request(
-            ['READ_MESSAGE_ACCESS', timestamp, node_name, user_id, from_key_hash])
+            ['READ_MESSAGE_ACCESS', timestamp, node_name, user_id, from_user_key_hash])
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
 
-    message_access = load_message_access(c, user_id, from_key_hash)
-
-    if message_access == None:
-        raise ex.UnknownMessageAcessException(user_id, from_key_hash)
-
-    else:
-        (user_id, from_key_hash, access) = message_access
-
+    if from_user_key_hash == None:
+        access = get_default_message_access(c, user_id)
         return {'user_id' : user_id,
-                'from_key_hash' : from_key_hash,
+                'from_user_key_hash' : None,
                 'access' : access}
 
-def delete_message_access(c, timestamp, node_name, user_id, from_key_hash, public_key_hash, signature):
+    message_access = load_message_access(c, user_id, from_user_key_hash)
+
+    if message_access == None:
+        raise ex.UnknownMessageAcessException(user_id, from_user_key_hash)
+
+    else:
+        (user_id, from_user_key_hash, access) = message_access
+
+        return {'user_id' : user_id,
+                'from_user_key_hash' : from_user_key_hash,
+                'access' : access}
+
+def delete_message_access(c, timestamp, node_name, user_id, from_user_key_hash, public_key_hash, signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
     ut.assert_node_name(node_name, config.node_name)
 
     request_string = ut.serialize_request(
-            ['DELETE_MESSAGE_ACCESS', timestamp, node_name, user_id, from_key_hash])
+            ['DELETE_MESSAGE_ACCESS', timestamp, node_name, user_id, from_user_key_hash])
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
 
-    message_access = load_message_access(c, user_id, from_key_hash)
+    message_access = load_message_access(c, user_id, from_user_key_hash)
 
     if message_access == None:
-        raise ex.UnknownMessageAcessException(user_id, from_key_hash)
+        raise ex.UnknownMessageAcessException(user_id, from_user_key_hash)
 
     c.execute('SELECT user_quota_id FROM users WHERE user_id=?', (user_id,))
     user_row = c.fetchone()
@@ -785,7 +811,26 @@ def delete_message_access(c, timestamp, node_name, user_id, from_key_hash, publi
 
     row_size = data_size(message_access)
     decrease_quota(c, user_quota_id, row_size)
-    remove_message_access_raw(c, user_id, from_key_hash)
+    remove_message_access_raw(c, user_id, from_user_key_hash)
+
+
+# query-message-access
+
+def query_message_access(c, timestamp, node_name, user_id, from_user, from_user_key_hash, signature):
+
+    assert_timestamp_fresh(timestamp, 'timestamp')
+    assert_node_name(node_name, 'node_name')
+
+    request_string = ut.serialize_request(
+            ['QUERY_MESSAGE_ACCESS', timestamp, node_name, user_id, from_user_key])
+
+    assert_request_signature(c, from_user, 'user', request_string, from_user_key, signature)
+
+    access = get_message_access(c, user_id, from_user_key)
+
+    return {'user_id' : user_id,
+            'from_user_key_hash' : from_user_key_hash,
+            'access' : access}
 
 
 # messages
@@ -1318,6 +1363,167 @@ def read_group_quota(c, timestamp, node_name, group_id, owner_id, read_signature
     return load_quota_obj(c, quota_id)
 
 
+def change_group_access(c, timestamp, node_name, group_id, owner_id, use, access, public_key_hash, request_signature):
+
+    assert_timestamp_fresh(timestamp, 'timestamp')
+    ut.assert_node_name(node_name, config.node_name)
+
+    request_string = ut.serialize_request(
+            ['CHANGE_GROUP_ACCESS', timestamp, node_name, group_id, owner_id, use, access])
+
+    assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
+
+    c.execute('SELECT user_quota_id FROM users WHERE user_id=?', (owner_id,))
+    row = c.fetchone()
+
+    if row == None:
+        # should not happen
+        raise ex.UnknownUserException(owner_id, 'owner_id')
+
+    (user_quota_id,) = row
+
+    c.execute('SELECT * FROM groups WHERE group_id=? AND owner_id=?', (group_id, owner_id))
+    row = c.fetchone()
+
+    (group_id, owner_id, post_access, read_access, delete_access,
+     posting_key_type, posting_pub_key,
+     reading_key_type, reading_pub_key, 
+     delete_key_type, delete_pub_key, 
+     quota_id, last_post_time) = row
+
+    old_size = data_size(row)
+    new_access_size = len(access)
+
+    sql_string = None
+    old_access_size = None
+
+    if use == 'post':
+        sql_string = 'UPDATE groups SET post_access=? WHERE group_id=? AND owner_id=?'
+        old_access_size = len(post_access)
+
+    elif use == 'read':
+        sql_string = 'UPDATE groups SET read_access=? WHERE group_id=? AND owner_id=?'
+        old_access_size = len(read_access)
+
+    elif use == 'delete':
+        sql_string = 'UPDATE groups SET delete_access=? WHERE group_id=? AND owner_id=?'
+        old_access_size = len(delete_access)
+
+    else:
+        raise ex.BadGroupKeyUseException(use)
+
+    if new_access_size > old_access_size:
+        try_increment_quota(c, user_quota_id, new_access_size - old_access_size)
+    elif new_access_size < old_access_size:
+        decrease_quota(c, user_quota_id, old_access_size - new_access_size)
+
+    c.execute(sql_string, (access, group_id, owner_id))
+
+
+def read_group_access(c, timestamp, node_name, group_id, owner_id, use, request_signature):
+
+    assert_timestamp_fresh(timestamp, 'timestamp')
+    ut.assert_node_name(node_name, 'node_name')
+
+    request_string = ut.serialize_request(
+            ['READ_GROUP_ACCESS', timestamp, node_name, group_id, owner_id, use])
+
+    sql_string = None
+
+    if use == 'post':
+        sql_string = 'SELECT post_access, posting_key_type, posting_pub_key FROM groups WHERE group_id=? AND owner_id=?'
+
+    elif use == 'read':
+        sql_string = 'SELECT read_access, reading_key_type, reading_pub_key FROM groups WHERE group_id=? AND owner_id=?'
+
+    elif use == 'delete':
+        sql_string = 'SELECT delete_access, delete_key_type, delete_pub_key FROM groups WHERE group_id=? AND owner_id=?'
+
+    else:
+        raise ex.BadGroupKeyUseException(use)
+
+    c.execute(sql_string, (group_id, owner_id))
+    row = c.fetchone()
+
+    if row == None:
+        raise ex.UnknownGroupException(group_id, owner_id)
+
+    (access, key_type, pub_key) = row
+
+    if pub_key != None:
+        ut.assert_signature(key_type, pub_key, request_string, request_signature, 'request_string')
+
+    return access
+
+
+# group_key
+
+
+def change_group_key(c, timestamp, node_name, group_id, owner_id, key_use, key_type, public_key, public_key_hash, request_signature):
+
+    assert_timestamp_fresh(timestamp, 'timestamp')
+    ut.assert_node_name(node_name, 'node_name')
+
+    request_string = ut.serialize_request(
+            ['CHANGE_GROUP_KEY', timestamp, node_name, group_id, owner_id, key_use, key_type, public_key])
+
+    assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
+
+    row = load_group(c, group_id, owner_id)
+
+    if row == None:
+        raise ex.UnknownGroupException(group_id, owner_id)
+
+    sql_string = None
+
+    if key_use == 'read':
+        sql_string = 'UPDATE groups SET reading_key_type=?, reading_pub_key=? WHERE group_id=? AND owner_id=?'
+    elif key_use == 'post':
+        sql_string = 'UPDATE groups SET posting_key_type=?, posting_pub_key=? WHERE group_id=? AND owner_id=?'
+    elif key_use == 'delete':
+        sql_string = 'UPDATE groups SET delete_key_type=?, delete_pub_key=? WHERE group_id=? AND owner_id=?'
+    else:
+        raise ex.BadGroupKeyUseException(key_use)
+
+    c.execute(sql_string, (key_type, public_key, group_id, owner_id))
+
+
+def read_group_key(c, timestamp, node_name, group_id, owner_id, key_use, public_key_hash, request_signature):
+
+    assert_timestamp_fresh(timestamp, 'timestamp')
+    ut.assert_node_name(node_name, 'node_name')
+
+    request_string = ut.serialize_request(
+            ['READ_GROUP_KEY', timestamp, node_name, group_id, owner_id, key_use])
+
+    assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
+
+    sql_string = None
+
+    if key_use == 'read':
+        sql_string = 'SELECT reading_key_type, reading_pub_key FROM groups WHERE group_id=? AND owner_id=?'
+    elif key_use == 'post':
+        sql_string = 'SELECT posting_key_type, posting_pub_key FROM groups WHERE group_id=? AND owner_id=?'
+    elif key_use == 'delete':
+        sql_string = 'SELECT delete_key_type, delete_pub_key FROM groups WHERE group_id=? AND owner_id=?'
+    else:
+        raise ex.BadGroupKeyUseException(key_use)
+
+    c.execute(sql_string, (group_id, owner_id))
+    row = c.fetchone()
+
+    if row == None:
+        raise ex.UnknownGroupException(group_id, owner_id)
+
+    (key_type, public_key) = row
+
+    return {'group_id' : group_id,
+            'owner_id' : owner_id,
+            'key_use' : key_use,
+            'key_type' : key_type,
+            'public_key' : public_key}
+
+
 
 # group_posts
 
@@ -1578,6 +1784,19 @@ def remove_complaint(c, complaint_id):
 
 def remove_complaints_for_node(c, offensive_node):
     c.execute('''DELETE FROM complaints WHERE offensive_node=?''', (offensive_node,))
+
+
+# version
+
+
+def read_version(node_name):
+
+    ut.assert_node_name(node_name, config.node_name)
+
+    return config_proto.version
+
+
+
 
 def read_database(c):
 

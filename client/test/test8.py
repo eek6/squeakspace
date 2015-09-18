@@ -143,6 +143,30 @@ alf2 = 'signed message from alf'
 tony1 = 'anonymous message from tony'
 tony2 = 'signed message from tony'
 
+
+resp = client.set_message_access(Tony.user_id, None, 'block', Tony.key) # block anonymous mail
+assert(resp['status'] == 'ok')
+client.assert_integrity(True)
+
+
+(resp, gen) = client.send_message(
+        to_user=Tony.user_id,
+        to_user_key_hash=Tony.key.public_key_hash,
+        from_user=None,
+        from_key=None,
+        message=alf1,
+        proof_of_work_args=None)
+assert(resp['status'] == 'error')
+assert(resp['reason'] == 'blocked')
+(alf1_id, alf1_time, _, _, _) = gen
+client.assert_integrity(True)
+
+
+resp = client.set_message_access(Tony.user_id, None, 'allow', Tony.key) # allow anonymous mail
+assert(resp['status'] == 'ok')
+client.assert_integrity(True)
+
+
 (resp, gen) = client.send_message(
         to_user=Tony.user_id,
         to_user_key_hash=Tony.key.public_key_hash,
@@ -153,6 +177,8 @@ tony2 = 'signed message from tony'
 assert(resp['status'] == 'ok')
 (alf1_id, alf1_time, _, _, _) = gen
 client.assert_integrity(True)
+
+
 
 (resp, gen) = client.send_message(
         to_user=Alf.user_id,
@@ -442,7 +468,7 @@ resp = client.read_message_access(Alf.user_id, Tony.key.public_key_hash, Alf.key
 assert(resp['status'] == 'ok')
 access = resp['message_access']
 assert(access['user_id'] == Alf.user_id)
-assert(access['from_key_hash'] == Tony.key.public_key_hash)
+assert(access['from_user_key_hash'] == Tony.key.public_key_hash)
 assert(access['access'] == access_str)
 client.assert_integrity(True)
 
@@ -486,7 +512,7 @@ resp = client.read_message_access(Alf.user_id, Tony.key.public_key_hash, Alf.key
 assert(resp['status'] == 'ok')
 access = resp['message_access']
 assert(access['user_id'] == Alf.user_id)
-assert(access['from_key_hash'] == Tony.key.public_key_hash)
+assert(access['from_user_key_hash'] == Tony.key.public_key_hash)
 assert(access['access'] == 'block')
 client.assert_integrity(True)
 

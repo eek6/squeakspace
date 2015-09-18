@@ -79,6 +79,7 @@ def verify_hash(data, hash):
 
 
 def assert_signature(key_type, public_key, data, signature, argument):
+
     if signature == None:
         raise ex.SignatureNullException()
 
@@ -166,6 +167,13 @@ def assert_has_access(access, message_string, proof_of_work, argument):
         raise ex.UnknownAccessException(access, argument)
 
 
+def assert_passphrase(key_type, private_key, passphrase):
+
+    alg = crypt_all.find_alg(key_type)
+
+    return alg.assert_passphrase(private_key, passphrase)
+
+
 def sign(key_type, private_key, data, passphrase=None):
 
     alg = crypt_all.find_alg(key_type)
@@ -234,6 +242,9 @@ class PrivateKey(PublicKey):
         PublicKey.__init__(self, key_type, public_key)
         self.private_key = private_key
         self.passphrase = passphrase
+
+    def assert_passphrase(self):
+        self.alg.assert_passphrase(self.private_key, self.passphrase)
 
     def decrypt(self, enc_data):
         return self.alg.decrypt(self.private_key, enc_data, self.passphrase)

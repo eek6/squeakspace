@@ -93,8 +93,8 @@ client.assert_integrity(True)
 resp = client.create_group(
           group_id='group1',
           owner_id=Alf.user_id,
-          read_access='allow',
           post_access='proof_of_work/' + proof_of_work_args,
+          read_access='allow',
           delete_access='allow',
           posting_pub_key = post_key,
           reading_pub_key = read_key,
@@ -110,8 +110,8 @@ client.assert_integrity(True)
 resp = client.create_group(
           group_id='group1',
           owner_id=Alf.user_id,
-          read_access='allow',
           post_access='proof_of_work/' + proof_of_work_args,
+          read_access='allow',
           delete_access='allow',
           posting_pub_key=post_key,
           reading_pub_key=read_key,
@@ -176,6 +176,63 @@ resp = client.read_last_post_time('group1', Alf.user_id, read_key, None)
 assert(resp['status'] == 'ok')
 assert(resp['last_post_time'] == post1_timestamp)
 client.assert_integrity(True)
+
+
+resp = client.read_group_access('group1', Alf.user_id, 'read', read_key)
+assert(resp['status'] == 'ok')
+assert(resp['access'] == 'allow')
+
+resp = client.change_group_access('group1', Alf.user_id, 'read', 'block', Alf.key)
+assert(resp['status'] == 'ok')
+
+resp = client.read_group_access('group1', Alf.user_id, 'read', read_key)
+assert(resp['status'] == 'ok')
+assert(resp['access'] == 'block')
+
+resp = client.read_post('group1', Alf.user_id, post1_id, read_key, None)
+assert(resp['status'] == 'error')
+client.assert_integrity(True)
+
+resp = client.change_group_access('group1', Alf.user_id, 'read', 'allow', Alf.key)
+assert(resp['status'] == 'ok')
+
+resp = client.read_post('group1', Alf.user_id, post1_id, read_key, None)
+assert(resp['status'] == 'ok')
+client.assert_integrity(True)
+
+
+resp = client.read_post('group1', Alf.user_id, post1_id, None, None)
+assert(resp['status'] == 'error')
+client.assert_integrity(True)
+
+resp = client.change_group_key('group1', Alf.user_id, 'read', None, Alf.key)
+assert(resp['status'] == 'ok')
+client.assert_integrity(True)
+
+resp = client.read_group_key('group1', Alf.user_id, 'read', Alf.key)
+assert(resp['status'] == 'ok')
+assert(resp['group_key']['key_type'] == None)
+assert(resp['group_key']['public_key'] == None)
+client.assert_integrity(True)
+
+resp = client.read_post('group1', Alf.user_id, post1_id, None, None)
+assert(resp['status'] == 'ok')
+client.assert_integrity(True)
+
+resp = client.change_group_key('group1', Alf.user_id, 'read', read_key, Alf.key)
+assert(resp['status'] == 'ok')
+client.assert_integrity(True)
+
+resp = client.read_post('group1', Alf.user_id, post1_id, None, None)
+assert(resp['status'] == 'error')
+client.assert_integrity(True)
+
+resp = client.read_post('group1', Alf.user_id, post1_id, read_key, None)
+assert(resp['status'] == 'ok')
+client.assert_integrity(True)
+
+
+
 
 (resp, gen) = client.make_post('group1', Alf.user_id, post2, post_key, proof_of_work_args)
 assert(resp['status'] == 'ok')

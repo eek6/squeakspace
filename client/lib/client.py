@@ -8,23 +8,94 @@ import client_raw as raw
 
 class Client:
 
-    def __init__(self, conn, node_name):
-        self.conn = conn
+    def __init__(self, conn, node_name, show_traffic=True):
+        self.client_raw = raw.ClientRaw(conn, show_traffic)
         self.node_name = node_name
 
-
     #complain
+
+    #group-access
+
+    def change_group_access(self, group_id, owner_id, use, access, auth_key):
+
+        timestamp = ut.current_time()
+
+        request_string = ut.serialize_request(
+                ['CHANGE_GROUP_ACCESS', timestamp, self.node_name, group_id, owner_id, use, access])
+
+        signature = auth_key.sign(request_string)
+
+        return self.client_raw.change_group_access(
+                timestamp, self.node_name,
+                group_id, owner_id, use, access,
+                auth_key.public_key_hash, signature)[0]
+
+
+    def read_group_access(self, group_id, owner_id, use, auth_key):
+
+        timestamp = ut.current_time()
     
+        request_string = ut.serialize_request(
+                ['READ_GROUP_ACCESS', timestamp, self.node_name, group_id, owner_id, use])
+
+        signature = None
+        if auth_key != None:
+            signature = auth_key.sign(request_string)
+
+        return self.client_raw.read_group_access(
+                timestamp, self.node_name,
+                group_id, owner_id, use,
+                signature)[0]
+
+    #group-key
+
+    def change_group_key(self, group_id, owner_id, key_use, pub_key, auth_key):
+
+        timestamp = ut.current_time()
+
+        key_type = None
+        public_key = None
+        if pub_key != None:
+            key_type = pub_key.key_type
+            public_key = pub_key.public_key
+         
+        request_string = ut.serialize_request(
+                ['CHANGE_GROUP_KEY', timestamp, self.node_name, group_id, owner_id,
+                 key_use, key_type, public_key])
+
+        signature = auth_key.sign(request_string)
+
+        return self.client_raw.change_group_key(
+                timestamp, self.node_name,
+                group_id, owner_id, key_use, key_type, public_key,
+                auth_key.public_key_hash, signature)[0]
+
+
+    def read_group_key(self, group_id, owner_id, key_use, auth_key):
+
+        timestamp = ut.current_time()
+    
+        request_string = ut.serialize_request(
+                ['READ_GROUP_KEY', timestamp, self.node_name, group_id, owner_id, key_use])
+
+        signature = None
+        if auth_key != None:
+            signature = auth_key.sign(request_string)
+
+        return self.client_raw.read_group_key(
+                timestamp, self.node_name,
+                group_id, owner_id, key_use,
+                auth_key.public_key_hash, signature)[0]
+
     #group-config
     
     #group
     
     def create_group(self,
                      group_id, owner_id,
-                     read_access, post_access, delete_access,
+                     post_access, read_access, delete_access,
                      posting_pub_key, reading_pub_key, delete_pub_key,
                      quota_allocated, when_space_exhausted, auth_key):
-                     
     
         timestamp = ut.current_time()
     
@@ -36,7 +107,7 @@ class Client:
              reading_pub_key.key_type, reading_pub_key.public_key,
              delete_pub_key.key_type, delete_pub_key.public_key,
              quota_allocated, when_space_exhausted])
-    
+
         signature = auth_key.sign(request_string)
     
         #ut.assert_access(read_access)
@@ -47,15 +118,14 @@ class Client:
         #ut.assert_public_key(delete_key_type, delete_pub_key)
         #ut.assert_exhaustion(when_space_exhausted)
     
-        return raw.create_group(
-            self.conn,
+        return self.client_raw.create_group(
             timestamp, self.node_name, group_id, owner_id,
-            read_access, post_access, delete_access,
+            post_access, read_access, delete_access,
             posting_pub_key.key_type, posting_pub_key.public_key,
             reading_pub_key.key_type, reading_pub_key.public_key,
             delete_pub_key.key_type, delete_pub_key.public_key,
             quota_allocated, when_space_exhausted,
-            auth_key.public_key_hash, signature)
+            auth_key.public_key_hash, signature)[0]
     
     
     def read_group(self, group_id, owner_id, auth_key):
@@ -67,9 +137,9 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.read_group(
-                self.conn, timestamp, self.node_name, group_id, owner_id,
-                auth_key.public_key_hash, signature)
+        return self.client_raw.read_group(
+                timestamp, self.node_name, group_id, owner_id,
+                auth_key.public_key_hash, signature)[0]
     
     
     def delete_group(self, group_id, owner_id, auth_key):
@@ -81,9 +151,9 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.delete_group(
-                self.conn, timestamp, self.node_name, group_id, owner_id,
-                auth_key.public_key_hash, signature)
+        return self.client_raw.delete_group(
+                timestamp, self.node_name, group_id, owner_id,
+                auth_key.public_key_hash, signature)[0]
     
     
     #group-quota
@@ -97,9 +167,9 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.change_group_quota(self.conn,
+        return self.client_raw.change_group_quota(
                 timestamp, self.node_name, group_id, owner_id, new_size, when_space_exhausted,
-                auth_key.public_key_hash, signature)
+                auth_key.public_key_hash, signature)[0]
     
     
     def read_group_quota(self, group_id, owner_id, group_read_key, proof_of_work_args):
@@ -116,7 +186,7 @@ class Client:
         if proof_of_work_args != None:
             proof_of_work = make_proof_of_work(proof_of_work_args, request_string)
     
-        return raw.read_group_quota(self.conn, timestamp, self.node_name, group_id, owner_id, read_signature, proof_of_work)
+        return self.client_raw.read_group_quota(timestamp, self.node_name, group_id, owner_id, read_signature, proof_of_work)[0]
     
         
     
@@ -132,7 +202,7 @@ class Client:
         if auth_key != None:
             signature = auth_key.sign(request_string)
     
-        return raw.read_last_message_time(self.conn, timestamp, self.node_name, user_id, auth_key.public_key_hash, signature)
+        return self.client_raw.read_last_message_time(timestamp, self.node_name, user_id, auth_key.public_key_hash, signature)[0]
     
     #last-post-time
     
@@ -150,49 +220,62 @@ class Client:
         if proof_of_work_args != None:
             proof_of_work = ut.make_proof_of_work(proof_of_work_args, request_string)
     
-        return raw.read_last_post_time(
-                self.conn, timestamp, self.node_name, group_id, owner_id, read_signature, proof_of_work)
+        return self.client_raw.read_last_post_time(
+                timestamp, self.node_name, group_id, owner_id, read_signature, proof_of_work)[0]
     
+    #query-message-access
+
+    def query_message_access(self, to_user, from_user, from_key):
+
+        timestamp = ut.current_time()
+
+        request_string = ut.serialize_request(
+                ['QUERY_MESSAGE_ACCESS', timestamp, self.node_name, to_user, from_user, from_key.public_key_hash])
+
+        signature = from_key.sign(request_string)
+
+        return self.client_raw.query_message_access(
+                timestamp, self.node_name, user_id, to_user, from_key.public_key_hash, signature)[0]
     
     #message-access
     
-    def read_message_access(self, user_id, from_key_hash, auth_key):
+    def read_message_access(self, user_id, from_user_key_hash, auth_key):
     
         timestamp = ut.current_time()
     
         request_string = ut.serialize_request(
-                ['READ_MESSAGE_ACCESS', timestamp, self.node_name, user_id, from_key_hash])
+                ['READ_MESSAGE_ACCESS', timestamp, self.node_name, user_id, from_user_key_hash])
     
         signature = auth_key.sign(request_string)
     
-        return raw.read_message_access(self.conn,
-                timestamp, self.node_name, user_id, from_key_hash, auth_key.public_key_hash, signature)
+        return self.client_raw.read_message_access(
+                timestamp, self.node_name, user_id, from_user_key_hash, auth_key.public_key_hash, signature)[0]
     
     
-    def set_message_access(self, user_id, from_key_hash, access, auth_key):
+    def set_message_access(self, user_id, from_user_key_hash, access, auth_key):
     
         timestamp = ut.current_time()
     
         request_string = ut.serialize_request(
-                ['SET_MESSAGE_ACCESS', timestamp, self.node_name, user_id, from_key_hash, access])
+                ['SET_MESSAGE_ACCESS', timestamp, self.node_name, user_id, from_user_key_hash, access])
     
         signature = auth_key.sign(request_string)
     
-        return raw.set_message_access(self.conn,
-                timestamp, self.node_name, user_id, from_key_hash, access, auth_key.public_key_hash, signature)
+        return self.client_raw.set_message_access(
+                timestamp, self.node_name, user_id, from_user_key_hash, access, auth_key.public_key_hash, signature)[0]
     
     
-    def delete_message_access(self, user_id, from_key_hash, auth_key):
+    def delete_message_access(self, user_id, from_user_key_hash, auth_key):
     
         timestamp = ut.current_time()
     
         request_string = ut.serialize_request(
-                ['DELETE_MESSAGE_ACCESS', timestamp, self.node_name, user_id, from_key_hash])
+                ['DELETE_MESSAGE_ACCESS', timestamp, self.node_name, user_id, from_user_key_hash])
     
         signature = auth_key.sign(request_string)
     
-        return raw.delete_message_access(self.conn,
-                timestamp, self.node_name, user_id, from_key_hash, auth_key.public_key_hash, signature)
+        return self.client_raw.delete_message_access(
+                timestamp, self.node_name, user_id, from_user_key_hash, auth_key.public_key_hash, signature)[0]
     
     
     #message-list
@@ -209,10 +292,10 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.read_message_list(
-                self.conn, timestamp, self.node_name, user_id,
+        return self.client_raw.read_message_list(
+                timestamp, self.node_name, user_id,
                 start_time, end_time, max_records, order,
-                auth_key.public_key_hash, signature)
+                auth_key.public_key_hash, signature)[0]
     
     
     #message
@@ -226,9 +309,9 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.read_message(
-                self.conn, timestamp, self.node_name, user_id, message_id,
-                auth_key.public_key_hash, signature)
+        return self.client_raw.read_message(
+                timestamp, self.node_name, user_id, message_id,
+                auth_key.public_key_hash, signature)[0]
     
     
     def send_message(
@@ -240,14 +323,14 @@ class Client:
     
         message_hash = ut.hash_function(message)
     
-        from_key_hash = None
+        from_user_key_hash = None
         if from_key != None:
-            from_key_hash = from_key.public_key_hash
+            from_user_key_hash = from_key.public_key_hash
     
         request_string = ut.serialize_request(
                 ['SEND_MESSAGE', timestamp, self.node_name,
                  to_user, to_user_key_hash,
-                 from_user, from_key_hash,
+                 from_user, from_user_key_hash,
                  message_hash])
     
         message_id = ut.hash_function(request_string)
@@ -260,13 +343,13 @@ class Client:
         if proof_of_work_args != None:
             proof_of_work = ut.make_proof_of_work(proof_of_work_args, message_id)
     
-        resp = raw.send_message(
-                self.conn, timestamp, self.node_name,
+        resp = self.client_raw.send_message(
+                timestamp, self.node_name,
                 to_user, to_user_key_hash,
-                from_user, from_key_hash,
+                from_user, from_user_key_hash,
                 message_hash,
                 message_id, message,
-                from_signature, proof_of_work)
+                from_signature, proof_of_work)[0]
     
         return resp, (message_id, timestamp, message_hash, from_signature, proof_of_work)
     
@@ -280,9 +363,9 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.delete_message(
-                self.conn, timestamp, self.node_name, user_id, message_id,
-                auth_key.public_key_hash, signature)
+        return self.client_raw.delete_message(
+                timestamp, self.node_name, user_id, message_id,
+                auth_key.public_key_hash, signature)[0]
     
     #message-quota
     
@@ -295,9 +378,9 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.change_message_quota(self.conn,
+        return self.client_raw.change_message_quota(
                 timestamp, self.node_name, user_id, new_size, when_space_exhausted,
-                auth_key.public_key_hash, signature)
+                auth_key.public_key_hash, signature)[0]
     
     
     def read_message_quota(self, user_id, auth_key):
@@ -309,7 +392,7 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.read_message_quota(self.conn, timestamp, self.node_name, user_id, auth_key.public_key_hash, signature)
+        return self.client_raw.read_message_quota(timestamp, self.node_name, user_id, auth_key.public_key_hash, signature)[0]
     
     
     #node
@@ -336,10 +419,10 @@ class Client:
         if proof_of_work_args != None:
             proof_of_work = ut.make_proof_of_work(proof_of_work_args, request_string)
      
-        return raw.read_post_list(
-                self.conn, timestamp, self.node_name, group_id, owner_id,
+        return self.client_raw.read_post_list(
+                timestamp, self.node_name, group_id, owner_id,
                 start_time, end_time, max_records, order,
-                read_signature, proof_of_work)
+                read_signature, proof_of_work)[0]
     
     
     #post
@@ -364,10 +447,10 @@ class Client:
         if proof_of_work_args != None:
             proof_of_work = ut.make_proof_of_work(proof_of_work_args, post_id)
     
-        resp = raw.make_post(
-                self.conn, timestamp, self.node_name, group_id, owner_id,
+        resp = self.client_raw.make_post(
+                timestamp, self.node_name, group_id, owner_id,
                 data_hash, post_id, data,
-                post_signature, proof_of_work)
+                post_signature, proof_of_work)[0]
     
         gen = (post_id, timestamp, data_hash, post_signature, proof_of_work)
     
@@ -389,10 +472,10 @@ class Client:
         if proof_of_work_args != None:
             proof_of_work = ut.make_proof_of_work(proof_of_work_args, request_string)
     
-        return raw.read_post(
-                self.conn, timestamp, self.node_name,
+        return self.client_raw.read_post(
+                timestamp, self.node_name,
                 group_id, owner_id, post_id,
-                read_signature, proof_of_work)
+                read_signature, proof_of_work)[0]
     
     def delete_post(self, group_id, owner_id, post_id, delete_key, proof_of_work_args):
     
@@ -409,9 +492,9 @@ class Client:
         if proof_of_work_args != None:
             proof_of_work = ut.make_proof_of_work(proof_of_work_args, request_string)
     
-        return raw.delete_post(
-                self.conn, timestamp, self.node_name, group_id, owner_id, post_id,
-                delete_signature, proof_of_work)
+        return self.client_raw.delete_post(
+                timestamp, self.node_name, group_id, owner_id, post_id,
+                delete_signature, proof_of_work)[0]
     
     #user
     
@@ -419,13 +502,13 @@ class Client:
                     default_message_access, when_mail_exhausted,
                     quota_size, mail_quota_size,
                     user_class, auth_token):
-    
-        return raw.create_user(
-                self.conn, user_id,
+
+        return self.client_raw.create_user(
+                self.node_name, user_id,
                 pub_key.key_type, pub_key.public_key, pub_key.public_key_hash, revoke_date,
                 default_message_access, when_mail_exhausted,
                 quota_size, mail_quota_size,
-                user_class, auth_token)
+                user_class, auth_token)[0]
     
     
     def read_user(self, user_id, auth_key):
@@ -437,9 +520,9 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.read_user(
-                self.conn, timestamp, self.node_name, user_id,
-                auth_key.public_key_hash, signature)
+        return self.client_raw.read_user(
+                timestamp, self.node_name, user_id,
+                auth_key.public_key_hash, signature)[0]
     
     
     def delete_user(self, user_id, auth_key):
@@ -451,7 +534,7 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.delete_user(self.conn, timestamp, self.node_name, user_id, auth_key.public_key_hash, signature)
+        return self.client_raw.delete_user(timestamp, self.node_name, user_id, auth_key.public_key_hash, signature)[0]
     
     # user-quota
     
@@ -464,10 +547,10 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.change_user_quota(self.conn,
+        return self.client_raw.change_user_quota(
                 timestamp, self.node_name, user_id, new_size,
                 user_class, auth_token,
-                auth_key.public_key_hash, signature)
+                auth_key.public_key_hash, signature)[0]
     
     
     
@@ -480,7 +563,7 @@ class Client:
     
         signature = auth_key.sign(request_string)
     
-        return raw.read_user_quota(self.conn, timestamp, self.node_name, user_id, auth_key.public_key_hash, signature)
+        return self.client_raw.read_user_quota(timestamp, self.node_name, user_id, auth_key.public_key_hash, signature)[0]
     
     
     
@@ -489,7 +572,7 @@ class Client:
     
     def read_version(self):
     
-        return raw.read_version(self.conn)
+        return self.client_raw.read_version(self.node_name)[0]
     
     
     
@@ -497,7 +580,7 @@ class Client:
     
     def send_debug(self, query):
     
-        return raw.send_debug(self.conn, query)
+        return self.client_raw.send_debug(query)[0]
          
     
     def assert_db_empty(self):

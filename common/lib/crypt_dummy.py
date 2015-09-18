@@ -21,11 +21,18 @@ class CryptDummy:
     def verify_signature(self, public_key, data, signature):
         try:
             (start, priv, dat) = signature.split('|')
-    
+
+            #print ('dummy verify_signature', (int(priv), int(public_key) * 2), (dat, data))
+            #print dat
+            #print data
+
             return (int(priv) == int(public_key) * 2) and (dat == data)
     
         except:
             return False
+
+    def assert_passphrase(self, private_key, passphrase):
+        pass
     
     def sign(self, private_key, data, passphrase=None):
         return 'signature|' + private_key + '|' + data
@@ -35,7 +42,7 @@ class CryptDummy:
     
     def decrypt(self, private_key, data, passphrase=None):
         start = 'encrypted'
-        assert(len(data) >= start)
+        assert(len(data) >= len(start))
         assert(data[:len(start)] == start)
         return data[len(start):]
     

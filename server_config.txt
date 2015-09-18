@@ -1,33 +1,34 @@
-
-Add these if you are using mod_wsgi with apache.
-Change {rootdir} to point the root.
+# This is for apache with mod_wsgi.
 
 
+# add this outside VirtualHost
+WSGIDaemonProcess squeakspace python-path=/home/eek6/squeakspace/server/lib:/home/eek6/squeakspace/common/lib:/home/eek6/squeakspace/lib:/home/eek6/squeakspace/lib/gnupg
 
 
+# add this inside of each VirtualHost
+    WSGIProcessGroup squeakspace
 
-WSGIPythonPath {rootdir}/squeakspace/server/lib:{rootdir}/squeakspace/common/lib:{rootdir}/squeakspace/lib:{rootdir}/squeakspace/lib/gnupg
+    WSGIScriptAlias /complain /home/eek6/squeakspace/server/scripts/complain.wsgi
+    WSGIScriptAlias /group-access /home/eek6/squeakspace/server/scripts/group-access.wsgi
+    WSGIScriptAlias /group-config /home/eek6/squeakspace/server/scripts/group-config.wsgi
+    WSGIScriptAlias /group-key /home/eek6/squeakspace/server/scripts/group-key.wsgi
+    WSGIScriptAlias /group-quota /home/eek6/squeakspace/server/scripts/group-quota.wsgi
+    WSGIScriptAlias /group /home/eek6/squeakspace/server/scripts/group.wsgi
+    WSGIScriptAlias /last-message-time /home/eek6/squeakspace/server/scripts/last-message-time.wsgi
+    WSGIScriptAlias /last-post-time /home/eek6/squeakspace/server/scripts/last-post-time.wsgi
+    WSGIScriptAlias /query-message-access /home/eek6/squeakspace/server/scripts/query-message-access.wsgi
+    WSGIScriptAlias /message-access /home/eek6/squeakspace/server/scripts/message-access.wsgi
+    WSGIScriptAlias /message-list /home/eek6/squeakspace/server/scripts/message-list.wsgi
+    WSGIScriptAlias /message-quota /home/eek6/squeakspace/server/scripts/message-quota.wsgi
+    WSGIScriptAlias /message /home/eek6/squeakspace/server/scripts/message.wsgi
+    WSGIScriptAlias /node /home/eek6/squeakspace/server/scripts/node.wsgi
+    WSGIScriptAlias /post-list /home/eek6/squeakspace/server/scripts/post-list.wsgi
+    WSGIScriptAlias /post /home/eek6/squeakspace/server/scripts/post.wsgi
+    WSGIScriptAlias /user-config /home/eek6/squeakspace/server/scripts/user-config.wsgi
+    WSGIScriptAlias /user-quota /home/eek6/squeakspace/server/scripts/user-quota.wsgi
+    WSGIScriptAlias /user /home/eek6/squeakspace/server/scripts/user.wsgi
+    WSGIScriptAlias /version /home/eek6/squeakspace/server/scripts/version.wsgi
 
+    # Below are for debugging. Don't enable in the wild.
+    WSGIScriptAlias /debug /home/eek6/squeakspace/server/scripts/debug.wsgi
 
-
-
-WSGIScriptAlias /complain {rootdir}/squeakspace/server/scripts/complain.wsgi
-WSGIScriptAlias /group-config {rootdir}/squeakspace/server/scripts/group-config.wsgi
-WSGIScriptAlias /group-quota {rootdir}/squeakspace/server/scripts/group-quota.wsgi
-WSGIScriptAlias /group {rootdir}/squeakspace/server/scripts/group.wsgi
-WSGIScriptAlias /last-message-time {rootdir}/squeakspace/server/scripts/last-message-time.wsgi
-WSGIScriptAlias /last-post-time {rootdir}/squeakspace/server/scripts/last-post-time.wsgi
-WSGIScriptAlias /message-access {rootdir}/squeakspace/server/scripts/message-access.wsgi
-WSGIScriptAlias /message-list {rootdir}/squeakspace/server/scripts/message-list.wsgi
-WSGIScriptAlias /message-quota {rootdir}/squeakspace/server/scripts/message-quota.wsgi
-WSGIScriptAlias /message {rootdir}/squeakspace/server/scripts/message.wsgi
-WSGIScriptAlias /node {rootdir}/squeakspace/server/scripts/node.wsgi
-WSGIScriptAlias /post-list {rootdir}/squeakspace/server/scripts/post-list.wsgi
-WSGIScriptAlias /post {rootdir}/squeakspace/server/scripts/post.wsgi
-WSGIScriptAlias /user-config {rootdir}/squeakspace/server/scripts/user-config.wsgi
-WSGIScriptAlias /user-quota {rootdir}/squeakspace/server/scripts/user-quota.wsgi
-WSGIScriptAlias /user {rootdir}/squeakspace/server/scripts/user.wsgi
-WSGIScriptAlias /version {rootdir}/squeakspace/server/scripts/version.wsgi
-
-# Below are for debugging. Don't enable if facing the internet.
-WSGIScriptAlias /debug {rootdir}/squeakspace/server/scripts/debug.wsgi

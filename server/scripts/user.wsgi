@@ -11,6 +11,7 @@ def post_handler(environ):
 
     query = ht.parse_post_request(environ)
 
+    node_name = ht.get_required(query, 'node_name')
     user_id = ht.get_required(query, 'user_id')
     key_type = ht.get_required(query, 'key_type')
     public_key = ht.get_required(query, 'public_key')
@@ -28,7 +29,7 @@ def post_handler(environ):
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        db.create_user(c,
+        db.create_user(c, node_name,
                        user_id, key_type, public_key, public_key_hash, revoke_date,
                        default_message_access, when_mail_exhausted,
                        db.root_quota_id, quota_size, mail_quota_size)
