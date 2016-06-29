@@ -9,7 +9,7 @@ class ProofOfWorkDummy:
     def assert_parameters(self, parameters_obj, parameters, argument):
         try:
             level = parameters_obj['level']
-        except ValueError:
+        except KeyError:
             raise ex.MalformedProofOfWorkParametersException(parameters, argument)
 
     def work(self, parameters_obj, data):
@@ -20,6 +20,7 @@ class ProofOfWorkDummy:
         level = parameters_obj['level']
         try:
             (start, lev, dat) = proof.split(';')
+            print ('verify_dummy:', start, lev, dat, parameters_obj, data)
             return start == 'proof_of_work' and \
                    int(lev) == level and \
                    dat == data

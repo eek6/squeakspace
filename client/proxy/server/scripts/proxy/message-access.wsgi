@@ -71,7 +71,7 @@ def delete_handler(environ):
     node_name = ht.get_required(query, 'node_name')
     from_user_key_hash = ht.get_required(query, 'from_user_key_hash')
     public_key_hash = ht.get_required(query, 'public_key_hash')
-    passphrase = ht.get_required(query, 'passphrase')
+    passphrase = ht.get_optional(query, 'passphrase')
 
     conn = db.connect(config.db_path)
     try:

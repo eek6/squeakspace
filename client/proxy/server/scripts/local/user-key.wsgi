@@ -12,12 +12,13 @@ def post_handler(environ):
     user_id = ht.get_required_cookie(cookies, 'user_id')
     session_id = ht.get_required_cookie(cookies, 'session_id')
 
+    node_name = ht.get_optional(query, 'node_name')
     public_key_hash = ht.get_required(query, 'public_key_hash')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        db.assign_user_key(c, user_id, session_id, public_key_hash)
+        db.assign_user_key(c, user_id, session_id, node_name, public_key_hash)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})
@@ -37,12 +38,13 @@ def get_handler(environ):
     user_id = ht.get_required_cookie(cookies, 'user_id')
     session_id = ht.get_required_cookie(cookies, 'session_id')
 
+    node_name = ht.get_optional(query, 'node_name')
     public_key_hash = ht.get_required(query, 'public_key_hash')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        key = db.read_user_key(c, user_id, session_id, public_key_hash)
+        key = db.read_user_key(c, user_id, session_id, node_name, public_key_hash)
 
         raise ht.ok_json({'status' : 'ok', 'key' : key})
         
@@ -61,12 +63,13 @@ def delete_handler(environ):
     user_id = ht.get_required_cookie(cookies, 'user_id')
     session_id = ht.get_required_cookie(cookies, 'session_id')
 
+    node_name = ht.get_optional(query, 'node_name')
     public_key_hash = ht.get_required(query, 'public_key_hash')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        db.delete_user_key(c, user_id, session_id, public_key_hash)
+        db.delete_user_key(c, user_id, session_id, node_name, public_key_hash)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})

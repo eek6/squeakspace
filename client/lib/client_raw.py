@@ -249,7 +249,7 @@ class ClientRaw:
     def query_message_access(self, timestamp, node_name, to_user, from_user, from_user_key_hash, from_user_key_sig):
     
         method = 'GET'
-        url = 'query-message-access?' + uc.encode(
+        url = '/query-message-access?' + uc.encode(
                 {'timestamp' : timestamp,
                  'node_name' : node_name,
                  'to_user' : to_user,

@@ -20,6 +20,9 @@ def close(conn):
 
 root_quota_id = 1
 
+
+
+
 def assert_timestamp_fresh(timestamp, argument):
     ut.assert_timestamp_fresh(
             timestamp, argument,
@@ -392,7 +395,7 @@ def change_quota(c, rowid, new_quota, new_when_space_exhausted):
     (quota_allocated, quota_used, when_space_exhausted, parent_quota) = row
 
     if when_space_exhausted != new_when_space_exhausted:
-        c.execute('UPDATE storage_quota SET when_space_exhausted=? WHERE rowid=?',
+        c.execute('UPDATE storage_quotas SET when_space_exhausted=? WHERE rowid=?',
                   (new_when_space_exhausted, rowid))
 
 
@@ -816,19 +819,22 @@ def delete_message_access(c, timestamp, node_name, user_id, from_user_key_hash, 
 
 # query-message-access
 
-def query_message_access(c, timestamp, node_name, user_id, from_user, from_user_key_hash, signature):
+def query_message_access(c, timestamp, node_name, to_user, from_user, from_user_key_hash, signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
-    assert_node_name(node_name, 'node_name')
+    ut.assert_node_name(node_name, 'node_name')
 
-    request_string = ut.serialize_request(
-            ['QUERY_MESSAGE_ACCESS', timestamp, node_name, user_id, from_user_key])
+    if from_user_key_hash != None:
+        request_string = ut.serialize_request(
+                ['QUERY_MESSAGE_ACCESS', timestamp, node_name, to_user, from_user, from_user_key_hash])
 
-    assert_request_signature(c, from_user, 'user', request_string, from_user_key, signature)
+        assert_request_signature(c, from_user, 'user', request_string, from_user_key_hash, signature)
 
-    access = get_message_access(c, user_id, from_user_key)
+    access = get_message_access(c, to_user, from_user_key_hash)
 
-    return {'user_id' : user_id,
+    print ('query_message_access', timestamp, node_name, to_user, from_user, from_user_key_hash, signature, access)
+
+    return {'to_user' : to_user,
             'from_user_key_hash' : from_user_key_hash,
             'access' : access}
 
@@ -1191,9 +1197,13 @@ def create_group(c, row, node_name, public_key_hash, request_signature):
     ut.assert_access(post_access, 'post_access')
     ut.assert_access(read_access, 'read_access')
     ut.assert_access(delete_access, 'delete_access')
-    ut.assert_public_key(posting_key_type, posting_pub_key, 'posting_pub_key')
-    ut.assert_public_key(reading_key_type, reading_pub_key, 'reading_pub_key')
-    ut.assert_public_key(delete_key_type, delete_pub_key, 'delete_pub_key')
+
+    if posting_pub_key != None:
+        ut.assert_public_key(posting_key_type, posting_pub_key, 'posting_pub_key')
+    if reading_pub_key != None:
+        ut.assert_public_key(reading_key_type, reading_pub_key, 'reading_pub_key')
+    if delete_pub_key != None:
+        ut.assert_public_key(delete_key_type, delete_pub_key, 'delete_pub_key')
 
     ut.assert_non_neg(quota_allocated, 'quota_allocated')
 
@@ -1373,14 +1383,14 @@ def change_group_access(c, timestamp, node_name, group_id, owner_id, use, access
 
     assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
 
-    c.execute('SELECT user_quota_id FROM users WHERE user_id=?', (owner_id,))
-    row = c.fetchone()
-
-    if row == None:
-        # should not happen
-        raise ex.UnknownUserException(owner_id, 'owner_id')
-
-    (user_quota_id,) = row
+#    c.execute('SELECT user_quota_id FROM users WHERE user_id=?', (owner_id,))
+#    row = c.fetchone()
+#
+#    if row == None:
+#        # should not happen
+#        raise ex.UnknownUserException(owner_id, 'owner_id')
+#
+#    (user_quota_id,) = row
 
     c.execute('SELECT * FROM groups WHERE group_id=? AND owner_id=?', (group_id, owner_id))
     row = c.fetchone()
@@ -1413,9 +1423,9 @@ def change_group_access(c, timestamp, node_name, group_id, owner_id, use, access
         raise ex.BadGroupKeyUseException(use)
 
     if new_access_size > old_access_size:
-        try_increment_quota(c, user_quota_id, new_access_size - old_access_size)
+        try_increment_quota(c, quota_id, new_access_size - old_access_size)
     elif new_access_size < old_access_size:
-        decrease_quota(c, user_quota_id, old_access_size - new_access_size)
+        decrease_quota(c, quota_id, old_access_size - new_access_size)
 
     c.execute(sql_string, (access, group_id, owner_id))
 
@@ -1458,7 +1468,6 @@ def read_group_access(c, timestamp, node_name, group_id, owner_id, use, request_
 
 # group_key
 
-
 def change_group_key(c, timestamp, node_name, group_id, owner_id, key_use, key_type, public_key, public_key_hash, request_signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
@@ -1474,16 +1483,32 @@ def change_group_key(c, timestamp, node_name, group_id, owner_id, key_use, key_t
     if row == None:
         raise ex.UnknownGroupException(group_id, owner_id)
 
+    (group_id, owner_id, post_access, read_access, delete_access,
+     posting_key_type, posting_pub_key,
+     reading_key_type, reading_pub_key,
+     delete_key_type, delete_pub_key, 
+     quota_id, last_post_time) = row
+
     sql_string = None
+    old_size = None
+    new_size = data_size([key_type, public_key])
 
     if key_use == 'read':
         sql_string = 'UPDATE groups SET reading_key_type=?, reading_pub_key=? WHERE group_id=? AND owner_id=?'
+        old_size = data_size([reading_key_type, reading_pub_key])
     elif key_use == 'post':
         sql_string = 'UPDATE groups SET posting_key_type=?, posting_pub_key=? WHERE group_id=? AND owner_id=?'
+        old_size = data_size([posting_key_type, posting_pub_key])
     elif key_use == 'delete':
         sql_string = 'UPDATE groups SET delete_key_type=?, delete_pub_key=? WHERE group_id=? AND owner_id=?'
+        old_size = data_size([delete_key_type, delete_pub_key])
     else:
         raise ex.BadGroupKeyUseException(key_use)
+
+    if new_size > old_size:
+        try_increment_quota(c, quota_id, new_size - old_size)
+    elif new_size < old_size:
+        decrease_quota(c, quota_id, old_size - new_size)
 
     c.execute(sql_string, (key_type, public_key, group_id, owner_id))
 

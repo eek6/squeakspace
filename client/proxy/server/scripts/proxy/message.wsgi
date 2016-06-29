@@ -18,13 +18,14 @@ def post_handler(environ):
     from_user_key_hash = ht.get_optional(query, 'from_user_key_hash')
     message  = ht.get_required(query, 'message')
     passphrase = ht.get_optional(query, 'passphrase')
+    force_encryption = ht.convert_bool(ht.get_optional(query, 'force_encryption'), 'force_encryption')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
         resp, local_gen = db.send_message(c, user_id, session_id,
                                           node_name, to_user, to_user_key_hash, from_user_key_hash,
-                                          message, passphrase)
+                                          message, passphrase, force_encryption)
         (message_id, timestamp, message_hash, from_signature, proof_of_work) = local_gen
 
         db.commit(conn)
@@ -56,13 +57,19 @@ def get_handler(environ):
     message_id = ht.get_required(query, 'message_id')
     public_key_hash = ht.get_required(query, 'public_key_hash')
     passphrase = ht.get_optional(query, 'passphrase')
+    to_key_passphrase = ht.get_optional(query, 'to_key_passphrase')
+    decrypt_message = ht.convert_bool(ht.get_optional(query, 'decrypt_message'), 'decrypt_message')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        resp = db.read_message(c, user_id, session_id, node_name, message_id, public_key_hash, passphrase)
+        resp, validation = db.read_message(c, user_id, session_id, node_name, message_id,
+                                           public_key_hash, passphrase,
+                                           to_key_passphrase, decrypt_message)
 
-        raise ht.ok_json({'status' : 'ok', 'resp' : resp})
+        raise ht.ok_json({'status' : 'ok',
+                          'resp' : resp,
+                          'validation' : validation})
         
     except ex.SqueakException as e:
         raise ht.convert_squeak_exception(e)
@@ -80,9 +87,9 @@ def delete_handler(environ):
     session_id = ht.get_required_cookie(cookies, 'session_id')
 
     node_name = ht.get_required(query, 'node_name')
-    message_id  = ht.get_required(query, 'message_id ')
+    message_id  = ht.get_required(query, 'message_id')
     public_key_hash = ht.get_required(query, 'public_key_hash')
-    passphrase = ht.get_required(query, 'passphrase')
+    passphrase = ht.get_optional(query, 'passphrase')
 
     conn = db.connect(config.db_path)
     try:

@@ -19,6 +19,8 @@ passphrase1 = 'secret_passphrase'
 group_name = 'alice.club'
 group_passphrase = 'super secret'
 
+node_name = 'deluxenode'
+
 
 resp, cookies = cl.create_local_user(user1, pass1)
 print cookies
@@ -35,7 +37,7 @@ pkh1 = resp['public_key_hash']
 resp = cl.read_private_key(user1, session1, pkh1)
 assert(resp['status'] == 'ok')
 
-resp = cl.assign_user_key(user1, session1, pkh1)
+resp = cl.assign_user_key(user1, session1, node_name, pkh1)
 assert(resp['status'] == 'ok')
 
 
@@ -44,99 +46,100 @@ resp = cl.generate_private_key(user1, session1, test_params.key_type, test_param
 assert(resp['status'] == 'ok')
 group_key_hash = resp['public_key_hash']
 
-resp = cl.assign_local_group_key(user1, session1, group_name, user1, 'post', group_key_hash)
+resp = cl.assign_local_group_key(user1, session1, group_name, user1, node_name, 'post', group_key_hash)
 assert(resp['status'] == 'ok')
 
-resp = cl.assign_local_group_key(user1, session1, group_name, user1, 'read', group_key_hash)
+resp = cl.assign_local_group_key(user1, session1, group_name, user1, node_name, 'read', group_key_hash)
 assert(resp['status'] == 'ok')
 
-resp = cl.assign_local_group_key(user1, session1, group_name, user1, 'delete', pkh1)
-assert(resp['status'] == 'ok')
-
-
-resp = cl.set_local_group_access(user1, session1, group_name, user1, 'post', 'allow')
-assert(resp['status'] == 'ok')
-
-resp = cl.set_local_group_access(user1, session1, group_name, user1, 'read', 'allow')
-assert(resp['status'] == 'ok')
-
-resp = cl.set_local_group_access(user1, session1, group_name, user1, 'delete', 'allow')
+resp = cl.assign_local_group_key(user1, session1, group_name, user1, node_name, 'delete', pkh1)
 assert(resp['status'] == 'ok')
 
 
-resp = cl.set_local_message_access(user1, session1, 'bob', pkh1, 'block')
+resp = cl.set_local_group_access(user1, session1, group_name, user1, node_name, 'post', 'allow')
 assert(resp['status'] == 'ok')
 
-resp = cl.read_local_message_access(user1, session1, 'bob', pkh1)
+resp = cl.set_local_group_access(user1, session1, group_name, user1, node_name, 'read', 'allow')
+assert(resp['status'] == 'ok')
+
+resp = cl.set_local_group_access(user1, session1, group_name, user1, node_name, 'delete', 'allow')
+assert(resp['status'] == 'ok')
+
+
+resp = cl.set_local_message_access(user1, session1, 'bob', node_name, pkh1, 'block')
+assert(resp['status'] == 'ok')
+
+resp = cl.read_local_message_access(user1, session1, 'bob', node_name, pkh1)
 assert(resp['status'] == 'ok')
 assert(resp['access']['user_id'] == user1)
 assert(resp['access']['to_user'] == 'bob')
 assert(resp['access']['from_user_key_hash'] == pkh1)
 assert(resp['access']['access'] == 'block')
 
-resp = cl.set_local_message_access(user1, session1, 'bob', pkh1, 'allow')
+resp = cl.set_local_message_access(user1, session1, 'bob', node_name, pkh1, 'allow')
 assert(resp['status'] == 'ok')
 
-resp = cl.read_local_message_access(user1, session1, 'bob', pkh1)
+resp = cl.read_local_message_access(user1, session1, 'bob', node_name, pkh1)
 assert(resp['status'] == 'ok')
 assert(resp['access']['user_id'] == user1)
 assert(resp['access']['to_user'] == 'bob')
 assert(resp['access']['from_user_key_hash'] == pkh1)
 assert(resp['access']['access'] == 'allow')
 
-resp = cl.delete_local_message_access(user1, session1, 'bob', pkh1)
+resp = cl.delete_local_message_access(user1, session1, 'bob', node_name, pkh1)
 assert(resp['status'] == 'ok')
 
-resp = cl.read_local_message_access(user1, session1, 'bob', pkh1)
+resp = cl.read_local_message_access(user1, session1, 'bob', node_name, pkh1)
 assert(resp['status'] == 'error')
 
-resp = cl.set_local_group_access(user1, session1, 'some.group', 'some.user', 'read', 'allow')
+resp = cl.set_local_group_access(user1, session1, 'some.group', 'some.user', node_name, 'read', 'allow')
 assert(resp['status'] == 'ok')
 
-resp = cl.read_local_group_access(user1, session1, 'some.group', 'some.user', 'read')
+resp = cl.read_local_group_access(user1, session1, 'some.group', 'some.user', node_name, 'read')
 assert(resp['status'] == 'ok')
 assert(resp['access']['user_id'] == user1)
 assert(resp['access']['owner_id'] == 'some.user')
 assert(resp['access']['group_id'] == 'some.group')
 assert(resp['access']['access'] == 'allow')
 
-resp = cl.set_local_group_access(user1, session1, 'some.group', 'some.user', 'read', 'block')
+resp = cl.set_local_group_access(user1, session1, 'some.group', 'some.user', node_name, 'read', 'block')
 assert(resp['status'] == 'ok')
 
-resp = cl.read_local_group_access(user1, session1, 'some.group', 'some.user', 'read')
+resp = cl.read_local_group_access(user1, session1, 'some.group', 'some.user', node_name, 'read')
 assert(resp['status'] == 'ok')
 assert(resp['access']['user_id'] == user1)
 assert(resp['access']['owner_id'] == 'some.user')
 assert(resp['access']['group_id'] == 'some.group')
 assert(resp['access']['access'] == 'block')
 
-resp = cl.delete_local_group_access(user1, session1, 'some.group', 'some.user', 'read')
+resp = cl.delete_local_group_access(user1, session1, 'some.group', 'some.user', node_name, 'read')
 assert(resp['status'] == 'ok')
 
-resp = cl.read_local_group_access(user1, session1, 'some.group', 'some.user', 'read')
+resp = cl.read_local_group_access(user1, session1, 'some.group', 'some.user', node_name, 'read')
 assert(resp['status'] == 'error')
 
-resp = cl.read_local_group_key(user1, session1, group_name, user1, 'read') 
+resp = cl.read_local_group_key(user1, session1, group_name, user1, node_name, 'read') 
 assert(resp['status'] == 'ok')
 assert(resp['key']['group_id'] == group_name)
 assert(resp['key']['owner_id'] == user1)
+assert(resp['key']['node_name'] == node_name)
 assert(resp['key']['key_use'] == 'read')
 assert(resp['key']['public_key_hash'] == group_key_hash)
 
-resp = cl.delete_local_group_key(user1, session1, group_name, user1, 'read') 
+resp = cl.delete_local_group_key(user1, session1, group_name, user1, node_name, 'read') 
 assert(resp['status'] == 'ok')
 
-resp = cl.read_local_group_key(user1, session1, group_name, user1, 'read') 
+resp = cl.read_local_group_key(user1, session1, group_name, user1, node_name, 'read') 
 assert(resp['status'] == 'error')
 
-resp = cl.read_user_key(user1, session1, pkh1)
+resp = cl.read_user_key(user1, session1, node_name, pkh1)
 assert(resp['status'] == 'ok')
 assert(resp['key']['public_key_hash'] == pkh1)
 
-resp = cl.delete_user_key(user1, session1, pkh1)
+resp = cl.delete_user_key(user1, session1, node_name, pkh1)
 assert(resp['status'] == 'ok')
 
-resp = cl.read_user_key(user1, session1, pkh1)
+resp = cl.read_user_key(user1, session1, node_name, pkh1)
 assert(resp['status'] == 'error')
 
 resp = cl.delete_private_key(user1, session1, pkh1)

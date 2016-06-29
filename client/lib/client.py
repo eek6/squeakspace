@@ -98,14 +98,33 @@ class Client:
                      quota_allocated, when_space_exhausted, auth_key):
     
         timestamp = ut.current_time()
+
+        posting_key_type = None
+        posting_pub_key_str = None
+        reading_key_type = None
+        reading_pub_key_str = None
+        delete_key_type = None
+        delete_pub_key_str = None
+
+        if posting_pub_key != None:
+            posting_key_type = posting_pub_key.key_type
+            posting_pub_key_str = posting_pub_key.public_key
+
+        if reading_pub_key != None:
+            reading_key_type = reading_pub_key.key_type
+            reading_pub_key_str = reading_pub_key.public_key
+
+        if delete_pub_key != None:
+            delete_key_type = delete_pub_key.key_type
+            delete_pub_key_str = delete_pub_key.public_key
     
         request_string = ut.serialize_request(
             ['CREATE_GROUP', timestamp, self.node_name,
              group_id, owner_id,
              post_access, read_access, delete_access,
-             posting_pub_key.key_type, posting_pub_key.public_key,
-             reading_pub_key.key_type, reading_pub_key.public_key,
-             delete_pub_key.key_type, delete_pub_key.public_key,
+             posting_key_type, posting_pub_key_str,
+             reading_key_type, reading_pub_key_str,
+             delete_key_type, delete_pub_key_str,
              quota_allocated, when_space_exhausted])
 
         signature = auth_key.sign(request_string)
@@ -121,9 +140,9 @@ class Client:
         return self.client_raw.create_group(
             timestamp, self.node_name, group_id, owner_id,
             post_access, read_access, delete_access,
-            posting_pub_key.key_type, posting_pub_key.public_key,
-            reading_pub_key.key_type, reading_pub_key.public_key,
-            delete_pub_key.key_type, delete_pub_key.public_key,
+            posting_key_type, posting_pub_key_str,
+            reading_key_type, reading_pub_key_str,
+            delete_key_type, delete_pub_key_str,
             quota_allocated, when_space_exhausted,
             auth_key.public_key_hash, signature)[0]
     
@@ -229,13 +248,18 @@ class Client:
 
         timestamp = ut.current_time()
 
-        request_string = ut.serialize_request(
-                ['QUERY_MESSAGE_ACCESS', timestamp, self.node_name, to_user, from_user, from_key.public_key_hash])
 
-        signature = from_key.sign(request_string)
+        public_key_hash = None
+        signature = None
+        if from_key != None:
+            request_string = ut.serialize_request(
+                    ['QUERY_MESSAGE_ACCESS', timestamp, self.node_name, to_user, from_user, from_key.public_key_hash])
+
+            public_key_hash = from_key.public_key_hash
+            signature = from_key.sign(request_string)
 
         return self.client_raw.query_message_access(
-                timestamp, self.node_name, user_id, to_user, from_key.public_key_hash, signature)[0]
+                timestamp, self.node_name, to_user, from_user, public_key_hash, signature)[0]
     
     #message-access
     
@@ -312,8 +336,8 @@ class Client:
         return self.client_raw.read_message(
                 timestamp, self.node_name, user_id, message_id,
                 auth_key.public_key_hash, signature)[0]
-    
-    
+
+
     def send_message(
             self, to_user, to_user_key_hash,
             from_user, from_key,
@@ -352,7 +376,8 @@ class Client:
                 from_signature, proof_of_work)[0]
     
         return resp, (message_id, timestamp, message_hash, from_signature, proof_of_work)
-    
+
+
     
     def delete_message(self, user_id, message_id, auth_key):
     

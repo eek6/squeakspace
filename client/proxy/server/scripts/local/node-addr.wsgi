@@ -14,11 +14,12 @@ def post_handler(environ):
 
     node_name = ht.get_required(query, 'node_name')
     url = ht.get_required(query, 'url')
+    real_node_name = ht.get_required(query, 'real_node_name')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        db.set_node_addr(c, user_id, session_id, node_name, url)
+        db.set_node_addr(c, user_id, session_id, node_name, url, real_node_name)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})

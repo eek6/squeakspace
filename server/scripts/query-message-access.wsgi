@@ -12,8 +12,8 @@ def get_handler(environ):
     node_name = ht.get_required(query, 'node_name')
     to_user = ht.get_required(query, 'to_user')
     from_user = ht.get_required(query, 'from_user')
-    from_user_key_hash = ht.get_required(query, 'from_user_key_hash')
-    from_user_key_sig = ht.get_required(query, 'from_user_key_sig')
+    from_user_key_hash = ht.get_optional(query, 'from_user_key_hash')
+    from_user_key_sig = ht.get_optional(query, 'from_user_key_sig')
 
     conn = db.connect(config.db_path)
     try:

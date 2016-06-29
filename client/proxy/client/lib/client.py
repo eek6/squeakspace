@@ -161,36 +161,39 @@ class Client:
     
     # local/group-key.wsgi
     
-    def read_local_group_key(self, user_id, session_id, group_id, owner_id, key_use):
+    def read_local_group_key(self, user_id, session_id, group_id, owner_id, node_name, key_use):
     
         method = 'GET'
         path = '/local/group-key?' + uc.encode(
                 {'owner_id' : owner_id,
                  'group_id' : group_id,
+                 'node_name' : node_name,
                  'key_use' : key_use})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
     
-    def delete_local_group_key(self, user_id, session_id, group_id, owner_id, key_use):
+    def delete_local_group_key(self, user_id, session_id, group_id, owner_id, node_name, key_use):
     
         method = 'DELETE'
         path = '/local/group-key'
         body = uc.encode(
                 {'owner_id' : owner_id,
                  'group_id' : group_id,
+                 'node_name' : node_name,
                  'key_use' : key_use})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
-    def assign_local_group_key(self, user_id, session_id, group_id, owner_id, key_use, public_key_hash):
+    def assign_local_group_key(self, user_id, session_id, group_id, owner_id, node_name, key_use, public_key_hash):
     
         method = 'POST'
         path = '/local/group-key'
         body = uc.encode(
                 {'owner_id' : owner_id,
                  'group_id' : group_id,
+                 'node_name' : node_name,
                  'key_use' : key_use,
                  'public_key_hash' : public_key_hash})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
@@ -222,10 +225,11 @@ class Client:
 
     # local/list-user-keys.wsgi
 
-    def list_user_keys(self, user_id, session_id):
+    def list_user_keys(self, user_id, session_id, node_name=None):
 
         method = 'GET'
-        path = '/local/list-user-keys'
+        path = '/local/list-user-keys?' + uc.encode(
+                {'node_name' : node_name})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
 
         return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
@@ -244,10 +248,12 @@ class Client:
 
     # local/list-other-user-keys.wsgi
 
-    def list_other_user_keys(self, user_id, session_id):
+    def list_other_user_keys(self, user_id, session_id, other_user_id=None, node_name=None):
 
         method = 'GET'
-        path = '/local/list-other-user-keys'
+        path = '/local/list-other-user-keys?' + uc.encode(
+                {'other_user_id' : other_user_id,
+                 'node_name' : node_name})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
 
         return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
@@ -255,31 +261,34 @@ class Client:
 
     # local/user-key.wsgi
     
-    def read_user_key(self, user_id, session_id, public_key_hash):
+    def read_user_key(self, user_id, session_id, node_name, public_key_hash):
     
         method = 'GET'
         path = '/local/user-key?' + uc.encode(
-                {'public_key_hash' : public_key_hash})
+                {'node_name' : node_name,
+                 'public_key_hash' : public_key_hash})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
     
-    def delete_user_key(self, user_id, session_id, public_key_hash):
+    def delete_user_key(self, user_id, session_id, node_name, public_key_hash):
     
         method = 'DELETE'
         path = '/local/user-key'
         body = uc.encode(
-                {'public_key_hash' : public_key_hash})
+                {'node_name' : node_name,
+                 'public_key_hash' : public_key_hash})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
-    def assign_user_key(self, user_id, session_id, public_key_hash):
+    def assign_user_key(self, user_id, session_id, node_name, public_key_hash):
     
         method = 'POST'
         path = '/local/user-key'
         body = uc.encode(
-                {'public_key_hash' : public_key_hash})
+                {'node_name' : node_name,
+                 'public_key_hash' : public_key_hash})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
@@ -287,33 +296,36 @@ class Client:
     
     # local/other-user-key.wsgi
     
-    def read_other_user_key(self, user_id, session_id, other_user_id, public_key_hash):
+    def read_other_user_key(self, user_id, session_id, other_user_id, node_name, public_key_hash):
     
         method = 'GET'
         path = '/local/other-user-key?' + uc.encode(
                 {'other_user_id' : other_user_id,
+                 'node_name' : node_name,
                  'public_key_hash' : public_key_hash})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
     
-    def delete_other_user_key(self, user_id, session_id, other_user_id, public_key_hash):
+    def delete_other_user_key(self, user_id, session_id, other_user_id, node_name, public_key_hash):
     
         method = 'DELETE'
         path = '/local/other-user-key'
         body = uc.encode(
                 {'other_user_id' : other_user_id,
+                 'node_name' : node_name,
                  'public_key_hash' : public_key_hash})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
-    def assign_other_user_key(self, user_id, session_id, other_user_id, public_key_hash, trust_score):
+    def assign_other_user_key(self, user_id, session_id, other_user_id, node_name, public_key_hash, trust_score):
     
         method = 'POST'
         path = '/local/other-user-key'
         body = uc.encode(
                 {'other_user_id' : other_user_id,
+                 'node_name' : node_name,
                  'public_key_hash' : public_key_hash,
                  'trust_score' : trust_score})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
@@ -342,49 +354,63 @@ class Client:
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
-    def set_node_addr(self, user_id, session_id, node_name, url):
+    def set_node_addr(self, user_id, session_id, node_name, url, real_node_name):
     
         method = 'POST'
         path = '/local/node-addr'
         body = uc.encode(
                 {'node_name' : node_name,
-                 'url' : url})
+                 'url' : url,
+                 'real_node_name' : real_node_name})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
+
+    # local/list-node-addr.wsgi
+
+    def list_node_addr(self, user_id, session_id):
     
+        method = 'GET'
+        path = '/local/list-node-addr' 
+        cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
+ 
     # local/group-access.wsgi
     
-    def read_local_group_access(self, user_id, session_id, group_id, owner_id, use):
+    def read_local_group_access(self, user_id, session_id, group_id, owner_id, node_name, use):
     
         method = 'GET'
         path = '/local/group-access?' + uc.encode(
                 {'owner_id' : owner_id,
                  'group_id' : group_id,
+                 'node_name' : node_name,
                  'use' : use})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
     
-    def delete_local_group_access(self, user_id, session_id, group_id, owner_id, use):
+    def delete_local_group_access(self, user_id, session_id, group_id, owner_id, node_name, use):
     
         method = 'DELETE'
         path = '/local/group-access'
         body = uc.encode(
                 {'owner_id' : owner_id,
                  'group_id' : group_id,
+                 'node_name' : node_name,
                  'use' : use})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
-    def set_local_group_access(self, user_id, session_id, group_id, owner_id, use, access, timestamp=None):
+    def set_local_group_access(self, user_id, session_id, group_id, owner_id, node_name, use, access, timestamp=None):
     
         method = 'POST'
         path = '/local/group-access'
         body = uc.encode(
                 {'owner_id' : owner_id,
                  'group_id' : group_id,
+                 'node_name' : node_name,
                  'use' : use,
                  'access' : access,
                  'timestamp' : timestamp})
@@ -395,39 +421,67 @@ class Client:
     
     # local/message-access.wsgi
     
-    def read_local_message_access(self, user_id, session_id, to_user, from_user_key_hash):
+    def read_local_message_access(self, user_id, session_id, to_user, node_name, from_user_key_hash):
     
         method = 'GET'
         path = '/local/message-access?' + uc.encode(
                 {'to_user' : to_user,
+                 'node_name' : node_name,
                  'from_user_key_hash' : from_user_key_hash})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
     
-    def delete_local_message_access(self, user_id, session_id, to_user, from_user_key_hash):
+    def delete_local_message_access(self, user_id, session_id, to_user, node_name, from_user_key_hash):
     
         method = 'DELETE'
         path = '/local/message-access'
         body = uc.encode(
                 {'to_user' : to_user,
+                 'node_name' : node_name,
                  'from_user_key_hash' : from_user_key_hash})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
-    def set_local_message_access(self, user_id, session_id, to_user, from_user_key_hash, access, timestamp=None):
+    def set_local_message_access(self, user_id, session_id, to_user, node_name, from_user_key_hash, access, timestamp=None):
     
         method = 'POST'
         path = '/local/message-access'
         body = uc.encode(
                 {'to_user' : to_user,
+                 'node_name' : node_name,
                  'from_user_key_hash' : from_user_key_hash,
                  'access' : access,
                  'timestamp' : timestamp})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
+
+    # local/passphrase.wsgi
+
+    def cache_passphrase(self, user_id, session_id, public_key_hash, passphrase, expire_time=None):
+    
+        method = 'POST'
+        path = '/local/passphrase'
+        body = uc.encode(
+                {'public_key_hash' : public_key_hash,
+                 'passphrase' : passphrase,
+                 'expire_time' : expire_time})
+        cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
+
+    def delete_passphrase(self, user_id, session_id, public_key_hash=None):
+    
+        method = 'DELETE'
+        path = '/local/passphrase'
+        body = uc.encode(
+                {'public_key_hash' : public_key_hash})
+        cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
+ 
     
     # local/password.wsgi
     
@@ -608,7 +662,7 @@ class Client:
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
 
-    
+
     # proxy/group-config.wsgi
     
     # proxy/group-quota.wsgi
@@ -721,15 +775,16 @@ class Client:
     
     def query_message_access(self, user_id, session_id, node_name, to_user, from_user_key_hash, passphrase):
     
-        method = 'GET'
-        path = '/proxy/query-message-access?' + uc.encode(
+        method = 'POST'
+        path = '/proxy/query-message-access'
+        body = uc.encode(
                 {'node_name' : node_name,
                  'to_user' : to_user,
                  'from_user_key_hash' : from_user_key_hash,
                  'passphrase' : passphrase})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
-        return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
+        return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
     
     # proxy/message-access.wsgi

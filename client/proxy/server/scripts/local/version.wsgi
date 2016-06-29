@@ -9,6 +9,8 @@ def get_handler(environ):
     try:
         version = config_proto.version
 
+        #print environ
+
         raise ht.ok_json({'status' : 'ok', 'version' : version})
         
     except ex.SqueakException as e:

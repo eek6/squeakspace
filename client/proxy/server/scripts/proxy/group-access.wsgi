@@ -55,6 +55,8 @@ def get_handler(environ):
         c = db.cursor(conn)
         resp = db.read_group_access(c, user_id, session_id, node_name, group_id, owner_id, use, passphrase)
 
+        db.commit(conn)
+
         raise ht.ok_json({'status' : 'ok', 'resp' : resp})
         
     except ex.SqueakException as e:

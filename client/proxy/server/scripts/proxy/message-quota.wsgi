@@ -22,7 +22,7 @@ def post_handler(environ):
     try:
         c = db.cursor(conn)
         resp = db.change_message_quota(c, user_id, session_id,
-                                       node_name, user_id, new_size, when_space_exhausted,
+                                       node_name, new_size, when_space_exhausted,
                                        public_key_hash, passphrase)
         db.commit(conn)
 

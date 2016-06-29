@@ -14,6 +14,7 @@ def post_handler(environ):
 
     group_id = ht.get_required(query, 'group_id')
     owner_id = ht.get_required(query, 'owner_id')
+    node_name = ht.get_required(query, 'node_name')
     use = ht.get_required(query, 'use')
     access = ht.get_required(query, 'access')
     timestamp = ht.get_optional(query, 'timestamp')
@@ -21,7 +22,7 @@ def post_handler(environ):
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        db.set_local_group_access(c, user_id, session_id, group_id, owner_id, use, access, timestamp)
+        db.set_local_group_access(c, user_id, session_id, group_id, owner_id, node_name, use, access, timestamp)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})
@@ -44,13 +45,14 @@ def get_handler(environ):
 
     group_id = ht.get_required(query, 'group_id')
     owner_id = ht.get_required(query, 'owner_id')
+    node_name = ht.get_required(query, 'node_name')
     use = ht.get_required(query, 'use')
 
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        access = db.read_local_group_access(c, user_id, session_id, group_id, owner_id, use)
+        access = db.read_local_group_access(c, user_id, session_id, group_id, owner_id, node_name, use)
 
         raise ht.ok_json({'status' : 'ok', 'access' : access})
         
@@ -71,13 +73,14 @@ def delete_handler(environ):
 
     group_id = ht.get_required(query, 'group_id')
     owner_id = ht.get_required(query, 'owner_id')
+    node_name = ht.get_required(query, 'node_name')
     use = ht.get_required(query, 'use')
 
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        db.delete_local_group_access(c, user_id, session_id, group_id, owner_id, use)
+        db.delete_local_group_access(c, user_id, session_id, group_id, owner_id, node_name, use)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})

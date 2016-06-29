@@ -4,6 +4,8 @@ import db_sqlite3 as db
 import squeak_ex as ex
 import config
 
+import Cookie
+
 def post_handler(environ):
 
     query = ht.parse_post_request(environ)
@@ -17,10 +19,13 @@ def post_handler(environ):
         session = db.login(c, user_id, password)
         db.commit(conn)
 
-        cookies = {'user_id' : session['user_id'],
-                   'session_id' : session['session_id']}
+        cookies = Cookie.SimpleCookie()
+        cookies['user_id'] = session['user_id']
+        cookies['user_id']['path'] = '/'
+        cookies['session_id'] = session['session_id']
+        cookies['session_id']['path'] = '/'
 
-        raise ht.ok_json({'status' : 'ok', 'session' : session}).load_cookies(cookies)
+        raise ht.ok_json({'status' : 'ok', 'session' : session}).attach_cookies(cookies)
 
     except ex.SqueakException as e:
         raise ht.convert_squeak_exception(e)

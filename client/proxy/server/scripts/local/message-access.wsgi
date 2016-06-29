@@ -13,6 +13,7 @@ def post_handler(environ):
     session_id = ht.get_required_cookie(cookies, 'session_id')
 
     to_user = ht.get_required(query, 'to_user')
+    node_name = ht.get_required(query, 'node_name')
     from_user_key_hash = ht.get_required(query, 'from_user_key_hash')
     access = ht.get_required(query, 'access')
     timestamp = ht.get_optional(query, 'timestamp')
@@ -21,7 +22,7 @@ def post_handler(environ):
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        db.set_local_message_access(c, user_id, session_id, to_user, from_user_key_hash, access, timestamp)
+        db.set_local_message_access(c, user_id, session_id, to_user, node_name, from_user_key_hash, access, timestamp)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})
@@ -42,12 +43,13 @@ def get_handler(environ):
     session_id = ht.get_required_cookie(cookies, 'session_id')
 
     to_user = ht.get_required(query, 'to_user')
+    node_name = ht.get_required(query, 'node_name')
     from_user_key_hash = ht.get_required(query, 'from_user_key_hash')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        access = db.read_local_message_access(c, user_id, session_id, to_user, from_user_key_hash)
+        access = db.read_local_message_access(c, user_id, session_id, to_user, node_name, from_user_key_hash)
 
         raise ht.ok_json({'status' : 'ok', 'access' : access})
         
@@ -67,12 +69,13 @@ def delete_handler(environ):
     session_id = ht.get_required_cookie(cookies, 'session_id')
 
     to_user = ht.get_required(query, 'to_user')
+    node_name = ht.get_required(query, 'node_name')
     from_user_key_hash = ht.get_required(query, 'from_user_key_hash')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        db.delete_local_message_access(c, user_id, session_id, to_user, from_user_key_hash)
+        db.delete_local_message_access(c, user_id, session_id, to_user, node_name, from_user_key_hash)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})

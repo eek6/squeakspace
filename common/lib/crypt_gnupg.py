@@ -136,31 +136,38 @@ class CryptGnuPG:
         assert(temp.results[0]['fingerprint'] == fingerprint)
         assert(temp.results[1]['status'] == 'Entirely new key\n')
         assert(temp.results[1]['fingerprint'] == fingerprint)
+
+        try:
     
-        temp = self.gpg.export_keys(fingerprint, secret=True)
-        debug_print('decrypt export_keys', temp)
-        assert(temp == key_str)
-    
-        self.assert_single_key(fingerprint)
-    
-        temp = self.gpg.decrypt(data, passphrase=passphrase)
-        debug_print('decrypt decrypt', temp.status, temp.ok)
-        assert(temp.ok)
-    
-        dec = str(temp)
-    
-        temp = self.gpg.delete_keys(fingerprint, secret=True)
-        debug_print('decrypt delete_keys(secret)', temp.status)
-        assert(temp.status == 'ok')
-    
-        temp = self.gpg.delete_keys(fingerprint)
-        debug_print('decrypt delete_keys', temp.status)
-        assert(temp.status == 'ok')
-    
-        return dec
+            temp = self.gpg.export_keys(fingerprint, secret=True)
+            debug_print('decrypt export_keys', temp)
+            assert(temp == key_str)
+        
+            self.assert_single_key(fingerprint)
+        
+            temp = self.gpg.decrypt(data, passphrase=passphrase)
+            debug_print('decrypt decrypt', temp.status, temp.ok)
+            if not temp.ok:
+                # Make this more robust!
+                # Actually check if the failure is due to the passphrase.
+                raise ex.SimpleBadPassphraseException()
+        
+            dec = str(temp)
+            return dec
+        
+        finally:
+
+            temp = self.gpg.delete_keys(fingerprint, secret=True)
+            debug_print('decrypt delete_keys(secret)', temp.status)
+            assert(temp.status == 'ok')
+        
+            temp = self.gpg.delete_keys(fingerprint)
+            debug_print('decrypt delete_keys', temp.status)
+            assert(temp.status == 'ok')
     
     
     def sign(self, private_key, data, passphrase=None):
+
         debug_print('sign', private_key, data, passphrase)
         key_obj = json.loads(private_key)
         debug_print('sign key_obj', key_obj)
@@ -178,35 +185,42 @@ class CryptGnuPG:
         assert(temp.results[0]['fingerprint'] == fingerprint)
         assert(temp.results[1]['status'] == 'Entirely new key\n')
         assert(temp.results[1]['fingerprint'] == fingerprint)
+
+        try:
+        
+            temp = self.gpg.export_keys(fingerprint, secret=True)
+            debug_print('sign export_keys', temp)
+            assert(temp == key_str)
+        
+            self.assert_single_key(fingerprint)
+        
+            temp = self.gpg.sign(data,
+                    default_key=fingerprint,
+                    detach=True,
+                    clearsign=False,
+                    binary=False,
+                    passphrase=passphrase)
+        
+            debug_print('sign sign', temp.status, temp.fingerprint)
+            #assert(temp.fingerprint == fingerprint) # this is a fingerprint of a subkey?
+            if temp.status != 'begin signing':
+                # Make this more robust!
+                # It could have failed for some other reason.
+                raise ex.SimpleBadPassphraseException()
+        
+            sig = str(temp)
+            return sig
     
-        temp = self.gpg.export_keys(fingerprint, secret=True)
-        debug_print('sign export_keys', temp)
-        assert(temp == key_str)
+        finally:
+        
+            temp = self.gpg.delete_keys(fingerprint, secret=True)
+            debug_print('sign delete_keys(secret)', temp.status)
+            assert(temp.status == 'ok')
+        
+            temp = self.gpg.delete_keys(fingerprint)
+            debug_print('sign delete_keys', temp.status)
+            assert(temp.status == 'ok')
     
-        self.assert_single_key(fingerprint)
-    
-        temp = self.gpg.sign(data,
-                default_key=fingerprint,
-                detach=True,
-                clearsign=False,
-                binary=False,
-                passphrase=passphrase)
-    
-        debug_print('sign sign', temp.status, temp.fingerprint)
-        assert(temp.status == 'begin signing')
-        #assert(temp.fingerprint == fingerprint) # this is a fingerprint of a subkey?
-    
-        sig = str(temp)
-    
-        temp = self.gpg.delete_keys(fingerprint, secret=True)
-        debug_print('sign delete_keys(secret)', temp.status)
-        assert(temp.status == 'ok')
-    
-        temp = self.gpg.delete_keys(fingerprint)
-        debug_print('sign delete_keys', temp.status)
-        assert(temp.status == 'ok')
-    
-        return sig
     
     def verify_signature(self, public_key, data, signature):
         debug_print('verify_signature', public_key, data, signature)

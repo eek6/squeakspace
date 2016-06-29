@@ -111,7 +111,7 @@ local/private-key.wsgi
   revoke_date
 
 
-local/gen-key.wsgi
+local/crypt/gen-key.wsgi
 
   POST -- generate a key pair
   cookies: user_id, session_id
@@ -133,6 +133,7 @@ local/group-key.wsgi
   
   group_id
   owner_id
+  node_name
   key_use
 
 
@@ -143,6 +144,7 @@ local/group-key.wsgi
   
   group_id
   owner_id
+  node_name
   key_use
 
 
@@ -153,9 +155,15 @@ local/group-key.wsgi
 
   group_id
   owner_id
+  node_name
   key_use
   public_key_hash
 
+
+local/list-node-addr.wsgi
+
+  GET -- list all node addrs associated to a user
+  cookies: user_id, session_id
 
 local/list-public-keys.wsgi
 
@@ -172,6 +180,9 @@ local/list-user-keys.wsgi
   GET -- list keys designated for use as user keys
   cookies: user_id, session_id
 
+  urlencoded
+  node_name -- optional, filter by node_name.
+
 local/list-group-keys.wsgi
 
   GET -- list key hashes used for groups.
@@ -182,6 +193,11 @@ local/list-other-user-keys.wsgi
   GET -- lists keys belonging to other users
   cookies: user_id, session_id
 
+  urlencoded
+
+  other_user_id -- optional
+  node_name -- optional
+
 
 local/user-key.wsgi
 
@@ -190,6 +206,7 @@ local/user-key.wsgi
 
   urlencoded
 
+  node_name
   public_key_hash
 
 
@@ -198,6 +215,7 @@ local/user-key.wsgi
 
   urlencoded
 
+  node_name
   public_key_hash
 
 
@@ -206,6 +224,7 @@ local/user-key.wsgi
 
   urlencoded
 
+  node_name
   public_key_hash
 
 
@@ -217,6 +236,7 @@ local/other-user-key.wsgi
   urlencoded
 
   other_user_id
+  node_name
   public_key_hash
 
 
@@ -226,6 +246,7 @@ local/other-user-key.wsgi
   urlencoded
 
   other_user_id
+  node_name
   public_key_hash
 
 
@@ -235,6 +256,7 @@ local/other-user-key.wsgi
   urlencoded
 
   other_user_id
+  node_name
   public_key_hash
   trust_score
 
@@ -256,6 +278,7 @@ local/node-addr.wsgi
 
   node_name
   url
+  real_node_name
 
 
   DELETE -- remove a node address entry
@@ -264,6 +287,7 @@ local/node-addr.wsgi
   urlencoded
 
   node_name
+
 
 
 local/group-access.wsgi
@@ -275,6 +299,7 @@ local/group-access.wsgi
 
   group_id
   owner_id
+  node_name
   use
 
 
@@ -283,6 +308,7 @@ local/group-access.wsgi
 
   group_id
   owner_id
+  node_name
   use
   access
   timestamp
@@ -295,6 +321,7 @@ local/group-access.wsgi
 
   group_id
   owner_id
+  node_name
   use
 
 
@@ -306,6 +333,7 @@ local/message-access.wsgi
   urlencoded
 
   to_user
+  node_name
   from_user_key_hash
 
 
@@ -315,6 +343,7 @@ local/message-access.wsgi
   urlencoded
 
   to_user
+  node_name
   from_user_key_hash
   access
   timestamp
@@ -326,7 +355,24 @@ local/message-access.wsgi
   urlencoded
 
   to_user
+  node_name
   from_user_key_hash
+
+
+local/passphrase.wsgi
+
+  POST -- caches a passphrase for a private key.
+  cookies: user_id, session_id
+
+  public_key_hash -- present if method == passphrase
+  passphrase
+  expire_time -- Or null. Int.
+
+
+  DELETE -- removes passphrase(s) from the cache.
+  cookies: user_id, session_id
+
+  public_key_hash -- if null, delete all passphrases.
 
 
 local/password.wsgi
@@ -634,6 +680,8 @@ proxy/message.wsgi
 
     public_key_hash -- belongs to user_id
     passphrase -- for public_key_hash, or null
+    to_key_passphrase -- for to_user_key or null
+    decrypt_message -- true if null
 
 
   POST  -- send mail
@@ -647,6 +695,7 @@ proxy/message.wsgi
     from_user_key_hash - see above
     message 
     passphrase -- for from_user_key_hash, or null
+    force_encryption -- true if null
 
 
   DELETE -- delete mail
@@ -691,6 +740,7 @@ proxy/post.wsgi
   owner_id
   data
   passphrase -- for post key, or null
+  force_encryption -- true if null
 
 
   GET -- download a post
@@ -703,6 +753,7 @@ proxy/post.wsgi
   owner_id
   post_id
   passphrase -- for read key, or null
+  decrypt_post -- true if null
 
 
   DELETE -- delete a post from a group

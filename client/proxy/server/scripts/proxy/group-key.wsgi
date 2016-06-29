@@ -63,6 +63,7 @@ def get_handler(environ):
     finally:
         db.close(conn)
 
+
 def main_handler(environ):
     ht.dispatch_on_method(environ, {
             'POST' : post_handler,

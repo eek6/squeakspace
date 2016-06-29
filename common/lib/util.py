@@ -97,6 +97,7 @@ def assert_proof_of_work(parameters, data, proof_of_work, argument):
 
 def assert_hash(data, hash, argument):
     calc_hash = hash_function(data)
+    #print ('assert_hash: ', ('data', data), ('hash', hash), ('calc_hash', calc_hash), ('argument', argument))
     if calc_hash != hash:
         raise ex.BadHashException(argument, data, hash, calc_hash)
 
@@ -235,6 +236,15 @@ class PublicKey:
     def verify_signature(self, data, signature):
         return self.alg.verify_signature(self.public_key, data, signature)
 
+    def assert_signature(self, data, signature, argument):
+        if signature == None:
+            raise ex.SignatureNullException()
+
+        if not self.verify_signature(data, signature):
+            raise ex.BadSignatureException(self.key_type, self.public_key, data, signature, argument)
+
+
+
 
 class PrivateKey(PublicKey):
 
@@ -247,10 +257,16 @@ class PrivateKey(PublicKey):
         self.alg.assert_passphrase(self.private_key, self.passphrase)
 
     def decrypt(self, enc_data):
-        return self.alg.decrypt(self.private_key, enc_data, self.passphrase)
+        try:
+            return self.alg.decrypt(self.private_key, enc_data, self.passphrase)
+        except ex.SimpleBadPassphraseException:
+            raise ex.BadPassphraseException(self.public_key_hash)
 
     def sign(self, data):
-        return self.alg.sign(self.private_key, data, self.passphrase)
+        try:
+            return self.alg.sign(self.private_key, data, self.passphrase)
+        except ex.SimpleBadPassphraseException:
+            raise ex.BadPassphraseException(self.public_key_hash)
 
 
 def createPrivateKey(key_type, key_parameters, passphrase = None):

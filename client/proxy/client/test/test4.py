@@ -51,7 +51,7 @@ pkh1 = resp['public_key_hash']
 resp = cl.read_private_key(user1, session1, pkh1)
 assert(resp['status'] == 'ok')
 
-resp = cl.assign_user_key(user1, session1, pkh1)
+resp = cl.assign_user_key(user1, session1, test_params.node_name, pkh1)
 assert(resp['status'] == 'ok')
 
 
@@ -70,16 +70,25 @@ pkh2 = resp['public_key_hash']
 resp = cl.read_private_key(user2, session2, pkh2)
 assert(resp['status'] == 'ok')
 
-resp = cl.assign_user_key(user2, session2, pkh2)
+resp = cl.assign_user_key(user2, session2, test_params.node_name, pkh2)
 assert(resp['status'] == 'ok')
 
+resp = cl.list_node_addr(user1, session1)
+assert(resp['status'] == 'ok')
+assert(len(resp['addrs']) == 0)
 
-resp = cl.set_node_addr(user1, session1, test_params.node_name, test_params.node_addr)
+resp = cl.set_node_addr(user1, session1, test_params.node_name, test_params.node_addr, test_params.node_name)
 assert(resp['status'] == 'ok')
 
 resp = cl.read_node_addr(user1, session1, test_params.node_name)
 assert(resp['status'] == 'ok')
-assert(resp['addr'] == test_params.node_addr)
+assert(resp['addr']['url'] == test_params.node_addr)
+
+resp = cl.list_node_addr(user1, session1)
+assert(resp['status'] == 'ok')
+assert(len(resp['addrs']) == 1)
+assert(resp['addrs'][0]['node_name'] == test_params.node_name)
+assert(resp['addrs'][0]['url'] == test_params.node_addr)
 
 resp = cl.delete_node_addr(user1, session1, test_params.node_name)
 assert(resp['status'] == 'ok')
@@ -87,10 +96,14 @@ assert(resp['status'] == 'ok')
 resp = cl.read_node_addr(user1, session1, test_params.node_name)
 assert(resp['status'] == 'error')
 
-resp = cl.set_node_addr(user1, session1, test_params.node_name, test_params.node_addr)
+resp = cl.list_node_addr(user1, session1)
+assert(resp['status'] == 'ok')
+assert(len(resp['addrs']) == 0)
+
+resp = cl.set_node_addr(user1, session1, test_params.node_name, test_params.node_addr, test_params.node_name)
 assert(resp['status'] == 'ok')
 
-resp = cl.set_node_addr(user2, session2, test_params.node_name, test_params.node_addr)
+resp = cl.set_node_addr(user2, session2, test_params.node_name, test_params.node_addr, test_params.node_name)
 assert(resp['status'] == 'ok')
 
 resp = cl.create_user(user1, session1,
@@ -129,11 +142,29 @@ resp = cl.import_public_key(user2, session2, pkt1, pk1, None)
 assert(resp['status'] == 'ok')
 assert(resp['public_key_hash'] == pkh1)
 
-resp = cl.assign_other_user_key(user1, session1, user2, pkh2, 5)
+resp = cl.assign_other_user_key(user1, session1, user2, test_params.node_name, pkh2, 5)
 assert(resp['status'] == 'ok')
 
-resp = cl.assign_other_user_key(user2, session2, user1, pkh1, 5)
+resp = cl.assign_other_user_key(user2, session2, user1, test_params.node_name, pkh1, 5)
 assert(resp['status'] == 'ok')
+
+
+resp = cl.read_last_message_time(user1, session1, test_params.node_name, pkh1, None)
+#assert(resp['status'] == 'error') # fails because of dummy keys
+
+resp = cl.cache_passphrase(user1, session1, pkh1, passphrase1, None)
+assert(resp['status'] == 'ok')
+
+resp = cl.read_last_message_time(user1, session1, test_params.node_name, pkh1, None)
+assert(resp['status'] == 'ok')
+
+resp = cl.delete_passphrase(user1, session1, None)
+assert(resp['status'] == 'ok')
+
+resp = cl.read_last_message_time(user1, session1, test_params.node_name, pkh1, None)
+#assert(resp['status'] == 'error') # fails because of dummy keys
+
+
 
 resp = cl.read_last_message_time(user1, session1, test_params.node_name, pkh1, passphrase1)
 assert(resp['status'] == 'ok')
@@ -160,6 +191,12 @@ plain = json.dumps(
 resp = cl.encrypt(user1, session1, pkh2, plain)
 assert(resp['status'] == 'ok')
 cipher = resp['ciphertext']
+
+resp = cl.query_message_access(user1, session1, test_params.node_name, user2, None, None)
+assert(resp['status'] == 'ok')
+
+resp = cl.query_message_access(user1, session1, test_params.node_name, user2, pkh1, None)
+assert(resp['status'] == 'ok')
 
 resp = cl.send_message(user1, session1, test_params.node_name,
                        to_user=user2,

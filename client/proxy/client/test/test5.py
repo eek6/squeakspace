@@ -55,7 +55,7 @@ pkh1 = resp['public_key_hash']
 resp = cl.read_private_key(user1, session1, pkh1)
 assert(resp['status'] == 'ok')
 
-resp = cl.assign_user_key(user1, session1, pkh1)
+resp = cl.assign_user_key(user1, session1, test_params.node_name, pkh1)
 assert(resp['status'] == 'ok')
 
 
@@ -74,16 +74,16 @@ pkh2 = resp['public_key_hash']
 resp = cl.read_private_key(user2, session2, pkh2)
 assert(resp['status'] == 'ok')
 
-resp = cl.assign_user_key(user2, session2, pkh2)
+resp = cl.assign_user_key(user2, session2, test_params.node_name, pkh2)
 assert(resp['status'] == 'ok')
 
 
-resp = cl.set_node_addr(user1, session1, test_params.node_name, test_params.node_addr)
+resp = cl.set_node_addr(user1, session1, test_params.node_name, test_params.node_addr, test_params.node_name)
 assert(resp['status'] == 'ok')
 
 resp = cl.read_node_addr(user1, session1, test_params.node_name)
 assert(resp['status'] == 'ok')
-assert(resp['addr'] == test_params.node_addr)
+assert(resp['addr']['url'] == test_params.node_addr)
 
 resp = cl.delete_node_addr(user1, session1, test_params.node_name)
 assert(resp['status'] == 'ok')
@@ -91,10 +91,10 @@ assert(resp['status'] == 'ok')
 resp = cl.read_node_addr(user1, session1, test_params.node_name)
 assert(resp['status'] == 'error')
 
-resp = cl.set_node_addr(user1, session1, test_params.node_name, test_params.node_addr)
+resp = cl.set_node_addr(user1, session1, test_params.node_name, test_params.node_addr, test_params.node_name)
 assert(resp['status'] == 'ok')
 
-resp = cl.set_node_addr(user2, session2, test_params.node_name, test_params.node_addr)
+resp = cl.set_node_addr(user2, session2, test_params.node_name, test_params.node_addr, test_params.node_name)
 assert(resp['status'] == 'ok')
 
 resp = cl.create_user(user1, session1,
@@ -153,22 +153,22 @@ assert(resp['key']['public_key_hash'] == group_pkh)
 group_post_access = 'proof_of_work/' + test_params.proof_of_work_args
 
 
-resp = cl.assign_local_group_key(user1, session1, group_name, user1, 'read', group_pkh)
+resp = cl.assign_local_group_key(user1, session1, group_name, user1, test_params.node_name, 'read', group_pkh)
 assert(resp['status'] == 'ok')
 
-resp = cl.assign_local_group_key(user1, session1, group_name, user1, 'post', group_pkh)
+resp = cl.assign_local_group_key(user1, session1, group_name, user1, test_params.node_name, 'post', group_pkh)
 assert(resp['status'] == 'ok')
 
-resp = cl.assign_local_group_key(user1, session1, group_name, user1, 'delete', pkh1)
+resp = cl.assign_local_group_key(user1, session1, group_name, user1, test_params.node_name, 'delete', pkh1)
 assert(resp['status'] == 'ok')
 
-resp = cl.set_local_group_access(user1, session1, group_name, user1, 'read', 'allow')
+resp = cl.set_local_group_access(user1, session1, group_name, user1, test_params.node_name, 'read', 'allow')
 assert(resp['status'] == 'ok')
 
-resp = cl.set_local_group_access(user1, session1, group_name, user1, 'post', group_post_access)
+resp = cl.set_local_group_access(user1, session1, group_name, user1, test_params.node_name, 'post', group_post_access)
 assert(resp['status'] == 'ok')
 
-resp = cl.set_local_group_access(user1, session1, group_name, user1, 'delete', 'allow')
+resp = cl.set_local_group_access(user1, session1, group_name, user1, test_params.node_name, 'delete', 'allow')
 assert(resp['status'] == 'ok')
 
 
@@ -227,11 +227,13 @@ invitation = {'type' : 'local_command_sequence',
                             {'type' : 'group_key',
                              'group_id' : group_name,
                              'owner_id' : user1,
+                             'node_name' : test_params.node_name,
                              'use' : 'read',
                              'public_key_hash' : group_pkh},
                             {'type' : 'group_key',
                              'group_id' : group_name,
                              'owner_id' : user1,
+                             'node_name' : test_params.node_name,
                              'use' : 'post',
                              'public_key_hash' : group_pkh}]}
 
@@ -298,9 +300,10 @@ for command in message_obj['commands']:
     elif command['type'] == 'group_key':
         group_id = command['group_id']
         owner_id = command['owner_id']
+        node_name = command['node_name']
         use = command['use']
         public_key_hash = command['public_key_hash']
-        resp = cl.assign_local_group_key(user2, session2, group_id, owner_id, use, public_key_hash)
+        resp = cl.assign_local_group_key(user2, session2, group_id, owner_id, node_name, use, public_key_hash)
         assert(resp['status'] == 'ok')
 
     else:
@@ -361,7 +364,7 @@ assert(resp['resp']['reason'] == 'proof of work required')
 parameters = resp['resp']['parameters']
 
 
-resp = cl.set_local_group_access(user2, session2, group_name, user1, 'post', 'proof_of_work/' + parameters)
+resp = cl.set_local_group_access(user2, session2, group_name, user1, test_params.node_name, 'post', 'proof_of_work/' + parameters)
 assert(resp['status'] == 'ok')
 
 
@@ -479,7 +482,7 @@ assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 
 
-resp = cl.delete_local_group_key(user2, session2, group_name, user1, 'read')
+resp = cl.delete_local_group_key(user2, session2, group_name, user1, node_name, 'read')
 assert(resp['status'] == 'ok')
 
 resp = cl.read_post(user2, session2, test_params.node_name, group_name, user1, post1_id, group_passphrase)
@@ -502,7 +505,7 @@ resp = cl.read_post(user2, session2, test_params.node_name, group_name, user1, p
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'error')
 
-resp = cl.assign_local_group_key(user2, session2, group_name, user1, 'read', group_pkh)
+resp = cl.assign_local_group_key(user2, session2, group_name, user1, node_name, 'read', group_pkh)
 assert(resp['status'] == 'ok')
 
 resp = cl.read_post(user2, session2, test_params.node_name, group_name, user1, post1_id, group_passphrase)

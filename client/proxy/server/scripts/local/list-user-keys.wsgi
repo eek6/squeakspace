@@ -7,15 +7,18 @@ import config
 
 def get_handler(environ):
 
+    query = ht.parse_get_request(environ)
     cookies = ht.parse_cookies(environ)
 
     user_id = ht.get_required_cookie(cookies, 'user_id')
     session_id = ht.get_required_cookie(cookies, 'session_id')
 
+    node_name = ht.get_optional(query, 'node_name')
+
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        keys = db.list_user_keys(c, user_id, session_id)
+        keys = db.list_user_keys(c, user_id, session_id, node_name)
 
         raise ht.ok_json({'status' : 'ok', 'keys' : keys})
         

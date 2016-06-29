@@ -33,12 +33,22 @@ class Response(Exception):
         self.response_headers = response_headers
 
     def attach_cookies(self, simplecookie):
-        cookies_str = simplecookie.output(header='', sep=';')
-        if len(cookies_str) > 1 and cookies_str[0] == ' ':
-            # get rid of a weird leading space.
-            cookies_str = cookies_str[1:]
-
-        self.response_headers.append(('Set-Cookie', cookies_str))
+#        cookies_str = simplecookie.output(header='', sep=';')
+#        if len(cookies_str) > 1 and cookies_str[0] == ' ':
+#            # get rid of a weird leading space.
+#            cookies_str = cookies_str[1:]
+#
+#        self.response_headers.append(('Set-Cookie', cookies_str))
+#
+#        print ('cookies_str', cookies_str)
+#
+        for cookie_name in simplecookie:
+            cookie_str = simplecookie[cookie_name].output(header='')
+            if len(cookie_str) > 1 and cookie_str[0] == ' ':
+                # get rid of leading space
+                cookie_str = cookie_str[1:]
+            self.response_headers.append(('Set-Cookie', cookie_str))
+            #print ('cookie_str', cookie_str)
 
         return self
 
@@ -49,7 +59,8 @@ class Response(Exception):
         simplecookie = Cookie.SimpleCookie()
         for cookie_name in cookies:
             simplecookie[cookie_name] = ''
-            # TODO: add expiration dates.
+            simplecookie[cookie_name]['path'] = '/'
+            simplecookie[cookie_name]['expires'] = 'Thu, 01 Jan 1970 00:00:00 UTC'
 
         return self.attach_cookies(simplecookie)
 
@@ -201,7 +212,7 @@ class CookieRequiredResponse(BadRequestResponse):
         self.cookie = cookie
         self.body = json_fun(
                 {'status' : 'error',
-                 'reason' : 'field required',
+                 'reason' : 'cookie required',
                  'cookie' : cookie})
         self.response_headers = [('Content-Type', 'application/json'),
                                  ('Content-Length', str(len(self.body)))]
@@ -236,8 +247,9 @@ class MethodNotAllowedJsonResponse(MethodNotAllowedResponse):
                                  ('Allow', allow_str)]
 
 
-def parse_get_request(environ, max_length = 1024):
+def parse_get_request(environ, max_length = 2048):
     query_string = environ['QUERY_STRING']
+    query_length = len(query_string)
 
     if len(query_string) > max_length:
         raise QueryTooLongResponse(query_length, max_length)
@@ -248,6 +260,10 @@ def parse_get_request(environ, max_length = 1024):
 
     except ValueError:
         raise MalformedQueryStringResponse(query_string)
+
+def check_content_type(expected_content_type, content_type):
+    return expected_content_type == content_type or \
+           content_type[:len(expected_content_type) + 1] == expected_content_type + ';'
 
 def parse_post_request(environ, max_length = 200*1024*1024): # 200 MB ok?
     content_length_str = environ.get('CONTENT_LENGTH')
@@ -269,7 +285,7 @@ def parse_post_request(environ, max_length = 200*1024*1024): # 200 MB ok?
 
     supported_content_type = 'application/x-www-form-urlencoded'
 
-    if content_type != supported_content_type:
+    if not check_content_type(supported_content_type, content_type):
         raise InvalidContentTypeResponse(content_type, supported_content_type)
 
     content_input = environ['wsgi.input']
@@ -317,7 +333,7 @@ def get_required_cookie(simplecookie, cookie):
         return simplecookie[cookie].value
 
     except KeyError:
-        raise CookieRequiredResponse(field)
+        raise CookieRequiredResponse(cookie)
 
 
 def get_optional_cookie(simplecookie, cookie):

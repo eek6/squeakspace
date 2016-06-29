@@ -15,6 +15,7 @@ def post_handler(environ):
 
     group_id = ht.get_required(query, 'group_id')
     owner_id = ht.get_required(query, 'owner_id')
+    node_name = ht.get_required(query, 'node_name')
     key_use = ht.get_required(query, 'key_use')
     public_key_hash = ht.get_required(query, 'public_key_hash')
 
@@ -22,7 +23,7 @@ def post_handler(environ):
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        db.assign_local_group_key(c, user_id, session_id, group_id, owner_id, key_use, public_key_hash)
+        db.assign_local_group_key(c, user_id, session_id, group_id, owner_id, node_name, key_use, public_key_hash)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})
@@ -44,13 +45,14 @@ def get_handler(environ):
 
     group_id = ht.get_required(query, 'group_id')
     owner_id = ht.get_required(query, 'owner_id')
+    node_name = ht.get_required(query, 'node_name')
     key_use = ht.get_required(query, 'key_use')
 
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        key = db.read_local_group_key(c, user_id, session_id, group_id, owner_id, key_use)
+        key = db.read_local_group_key(c, user_id, session_id, group_id, owner_id, node_name, key_use)
 
         raise ht.ok_json({'status' : 'ok', 'key' : key})
         
@@ -71,13 +73,14 @@ def delete_handler(environ):
 
     group_id = ht.get_required(query, 'group_id')
     owner_id = ht.get_required(query, 'owner_id')
+    node_name = ht.get_required(query, 'node_name')
     key_use = ht.get_required(query, 'key_use')
 
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        db.delete_local_group_key(c, user_id, session_id, group_id, owner_id, key_use)
+        db.delete_local_group_key(c, user_id, session_id, group_id, owner_id, node_name, key_use)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})

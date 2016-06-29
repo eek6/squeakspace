@@ -544,3 +544,21 @@ class BadGroupKeyUseException(SqueakException):
                 'error_code' : self.type,
                 'reason' : 'bad group key use',
                 'use' : self.use}
+
+
+class BadPassphraseException(SqueakException):
+    type = SqueakStatusCodes.bad_request
+
+    def __init__(self, public_key_hash):
+        self.public_key_hash = public_key_hash
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type,
+                'reason' : 'bad passphrase',
+                'public_key_hash' : self.public_key_hash}
+
+class SimpleBadPassphraseException(Exception):
+    pass
+
+

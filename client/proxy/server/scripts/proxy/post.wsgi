@@ -17,11 +17,13 @@ def post_handler(environ):
     owner_id = ht.get_required(query, 'owner_id')
     data = ht.get_required(query, 'data')
     passphrase = ht.get_optional(query, 'passphrase')
+    force_encryption = ht.convert_bool(ht.get_optional(query, 'force_encryption'), 'force_encryption')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        resp, local_gen = db.make_post(c, user_id, session_id, node_name, group_id, owner_id, data, passphrase)
+        resp, local_gen = db.make_post(c, user_id, session_id, node_name, group_id, owner_id, data,
+                                       passphrase, force_encryption)
 
         (post_id, timestamp, data_hash, post_signature, proof_of_work) = local_gen
 
@@ -55,11 +57,13 @@ def get_handler(environ):
     owner_id = ht.get_required(query, 'owner_id')
     post_id = ht.get_required(query, 'post_id')
     passphrase = ht.get_optional(query, 'passphrase')
+    decrypt_post = ht.convert_bool(ht.get_optional(query, 'decrypt_post'), 'decrypt_post')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        resp = db.read_post(c, user_id, session_id, node_name, group_id, owner_id, post_id, passphrase)
+        resp = db.read_post(c, user_id, session_id, node_name, group_id, owner_id, post_id,
+                            passphrase, decrypt_post)
 
         raise ht.ok_json({'status' : 'ok', 'resp' : resp})
         

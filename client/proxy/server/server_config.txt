@@ -1,5 +1,6 @@
 
-WSGIDaemonProcess squeakclient python-path=/home/eek6/squeakspace/client/proxy/server/lib:/home/eek6/squeakspace/client/lib:/home/eek6/squeakspace/common/lib:/home/eek6/squeakspace/lib:/home/eek6/squeakspace/lib/gnupg:/home/eek6/squeakspace/lib/backports.pbkdf2-0.1
+WSGIDaemonProcess squeakclient processes=1 threads=15 python-path=/home/eek6/squeakspace/client/proxy/server/lib:/home/eek6/squeakspace/client/lib:/home/eek6/squeakspace/common/lib:/home/eek6/squeakspace/lib:/home/eek6/squeakspace/lib/gnupg:/home/eek6/squeakspace/lib/backports.pbkdf2-0.1
+
 
 Listen 12323 # non-secure http
 Listen 12324 # https
@@ -11,6 +12,7 @@ Listen 12324 # https
 
 
     WSGIProcessGroup squeakclient
+    WSGIApplicationGroup %{GLOBAL}
 
     WSGIScriptAlias /local/crypt/gen-key /home/eek6/squeakspace/client/proxy/server/scripts/local/crypt/gen-key.wsgi
     WSGIScriptAlias /local/crypt/encrypt /home/eek6/squeakspace/client/proxy/server/scripts/local/crypt/encrypt.wsgi
@@ -29,6 +31,7 @@ Listen 12324 # https
     WSGIScriptAlias /local/message-access /home/eek6/squeakspace/client/proxy/server/scripts/local/message-access.wsgi
     WSGIScriptAlias /local/node-addr /home/eek6/squeakspace/client/proxy/server/scripts/local/node-addr.wsgi
     WSGIScriptAlias /local/other-user-key /home/eek6/squeakspace/client/proxy/server/scripts/local/other-user-key.wsgi
+    WSGIScriptAlias /local/passphrase /home/eek6/squeakspace/client/proxy/server/scripts/local/passphrase.wsgi
     WSGIScriptAlias /local/password /home/eek6/squeakspace/client/proxy/server/scripts/local/password.wsgi
     WSGIScriptAlias /local/private-key /home/eek6/squeakspace/client/proxy/server/scripts/local/private-key.wsgi
     WSGIScriptAlias /local/public-key /home/eek6/squeakspace/client/proxy/server/scripts/local/public-key.wsgi
@@ -57,6 +60,7 @@ Listen 12324 # https
     WSGIScriptAlias /proxy/node /home/eek6/squeakspace/client/proxy/server/scripts/proxy/node.wsgi
     WSGIScriptAlias /proxy/post-list /home/eek6/squeakspace/client/proxy/server/scripts/proxy/post-list.wsgi
     WSGIScriptAlias /proxy/post /home/eek6/squeakspace/client/proxy/server/scripts/proxy/post.wsgi
+    WSGIScriptAlias /proxy/query-message-access /home/eek6/squeakspace/client/proxy/server/scripts/proxy/query-message-access.wsgi
     WSGIScriptAlias /proxy/user-config /home/eek6/squeakspace/client/proxy/server/scripts/proxy/user-config.wsgi
     WSGIScriptAlias /proxy/user-quota /home/eek6/squeakspace/client/proxy/server/scripts/proxy/user-quota.wsgi
     WSGIScriptAlias /proxy/user /home/eek6/squeakspace/client/proxy/server/scripts/proxy/user.wsgi
