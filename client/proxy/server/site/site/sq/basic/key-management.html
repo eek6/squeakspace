@@ -1,0 +1,903 @@
+<html>
+<head>
+<title>
+Key Management
+</title>
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/tablemanager-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+function status_say(mesg) {
+    $('#message').text(mesg);
+}
+
+function update_public_keys() {
+    squeakclient.local.list_public_keys(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var select = $('#public-keys'),
+                        other_user_keys_select = $('#other-user-key-pkh'),
+                        keys = resp.keys;
+
+                    refresh_select(select, keys);
+                    refresh_select(other_user_keys_select, keys);
+
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, status_say);
+                } else {
+                }
+            });
+}
+
+function update_private_keys() {
+    squeakclient.local.list_private_keys(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var select = $('#private-keys'),
+                        group_keys_select = $('#group-keys-pkh'),
+                        user_keys_select = $('#user-key-private-key'),
+                        keys = resp.keys;
+
+                    refresh_select(select, keys);
+                    refresh_select(group_keys_select, keys);
+                    refresh_select(user_keys_select, keys);
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, status_say);
+                } else {
+                }
+            });
+}
+
+function update_user_keys() {
+
+    var table = new TableManager($('#user-keys'));
+
+    squeakclient.local.list_user_keys(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0;
+
+                    table.clear();
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i];
+
+                        table.addRow([key.node_name, key.public_key_hash]);
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, status_say);
+                } else {
+                }
+            });
+}
+
+
+function update_other_user_keys() {
+
+    var other_user_keys_manager = new TableManager($('#other-user-keys'));
+
+    squeakclient.local.list_other_user_keys(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0;
+
+                    other_user_keys_manager.clear();
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i];
+
+                        other_user_keys_manager.addRow(
+                            [key.user_id, key.node_name, key.public_key_hash, key.trust_score]);
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, status_say);
+                } else {
+                }
+            });
+}
+
+
+function update_group_keys() {
+
+    var group_keys_manager = new TableManager($('#group-keys'));
+
+    squeakclient.local.list_group_keys(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0;
+
+                    group_keys_manager.clear();
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i];
+
+                        group_keys_manager.addRow(
+                            [key.group_id, key.owner_id, key.node_name, key.key_use, key.public_key_hash]);
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, status_say);
+                } else {
+                }
+            });
+}
+
+function key_gen_say(mesg) {
+    $('#key_gen_message').text(mesg);
+}
+
+function gen_priv_key() {
+    var key_type = $('#key-type').val(),
+        key_params_obj = {},
+        revoke_date = $('#revoke_date').val(),
+        passphrase = $('#passphrase').val(),
+        passphrase2 = $('#passphrase2').val();
+
+    if (passphrase !== passphrase2) {
+        key_gen_say("Passphrases don't match.");
+        return;
+    }
+
+    if (key_type === 'dummy') {
+    }
+    else if (key_type === 'pgp') {
+        var div = $('#pgp-parameters'),
+            pgp_name_real = div.find('.name-real').val();
+            pgp_name_email = div.find('.name-email').val();
+            pgp_expire_date = div.find('.expire-date').val();
+            pgp_key_type = div.find('.key-type').val();
+            pgp_key_length = div.find('.key-length').val();
+            pgp_key_usage = div.find('.key-usage').val();
+            pgp_subkey_type = div.find('.subkey-type').val();
+            pgp_subkey_length = div.find('.subkey-length').val();
+            pgp_subkey_usage = div.find('.subkey-usage').val();
+
+
+        if (pgp_name_real !== '')
+            key_params_obj.name_real = pgp_name_real;
+        if (pgp_name_email !== '')
+            key_params_obj.name_email = pgp_name_email;
+        if (pgp_expire_date !== '')
+            key_params_obj.expire_date = pgp_expire_date;
+        if (pgp_key_type !== '')
+            key_params_obj.key_type = pgp_key_type;
+        if (pgp_key_length !== '') {
+            var pgp_key_length_int = parseInt(pgp_key_length);
+
+            if (isNaN(pgp_key_length_int)) {
+                key_gen_say('Key-Length must be an integer');
+                return;
+            }
+
+            key_params_obj.key_length = pgp_key_length_int;
+        }
+        if (pgp_key_usage !== '')
+            key_params_obj.key_usage = pgp_key_usage;
+        if (pgp_subkey_type !== '')
+            key_params_obj.subkey_type = pgp_subkey_type;
+        if (pgp_subkey_length !== '') {
+            var pgp_subkey_length_int = parseInt(pgp_subkey_length);
+
+            if (isNaN(pgp_subkey_length_int)) {
+                key_gen_say('Subkey-Length must be an integer');
+                return;
+            }
+
+            key_params_obj.subkey_length = pgp_subkey_length_int;
+        }
+        if (pgp_subkey_usage !== '')
+            key_params_obj.subkey_usage = pgp_subkey_usage;
+        if (passphrase !== '')
+            key_params_obj.passphrase = passphrase;
+    }
+    else {
+        key_gen_say('Key Type required');
+        return;
+    }
+
+    var key_parameters = JSON.stringify(key_params_obj);
+
+    key_gen_say('Generating...');
+
+    squeakclient.local.generate_private_key(
+        {key_type: key_type,
+         key_parameters: key_parameters,
+         revoke_date: revoke_date,
+         passphrase: passphrase},
+        function(resp, textStatus) {
+            debug(JSON.stringify(resp));
+
+            if (resp.status === 'ok') {
+                key_gen_say('Key generated. Hash: ' + resp.public_key_hash);
+                update_private_keys();
+                $('#private-keys-div').show();
+            } else if (resp.status === 'error') {
+                handle_error1(resp, key_gen_say);
+            } else {
+            }
+        });
+}
+
+function private_key_say(mesg) {
+    $('#private-key-message').text(mesg);
+}
+
+function delete_private_key() {
+    var key_hash = $('#private-keys').val();
+
+    squeakclient.local.delete_private_key(
+            {public_key_hash: key_hash},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    private_key_say('Key Deleted');
+                    update_private_keys();
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'field required' && resp.field === 'public_key_hash') {
+                        private_key_say('No key selected');
+                    } else if (handle_error1(resp, private_key_say)) {
+                    }
+                } else {
+                }
+            });
+}
+
+function export_private_key() {
+    var key_hash = $('#private-keys').val();
+
+    squeakclient.local.read_private_key(
+            {public_key_hash: key_hash},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var key = resp.key,
+                        pub_key = {public_key_hash: key.public_key_hash,
+                                   key_type: key.key_type,
+                                   revoke_date: key.revoke_date,
+                                   public_key: key.public_key};
+
+                    $('#private-key-export-pkh').text(key.public_key_hash);
+                    $('#private-key-export-key-type').text(key.key_type);
+                    $('#private-key-export-revoke-date').text(key.revoke_date);
+                    $('#private-key-export-public-export').text(JSON.stringify(pub_key));
+                    $('#private-key-export-private-export').text(JSON.stringify(key));
+                    $('#private-key-export-div').show();
+
+                    private_key_say('Key Exported');
+
+                } else if (resp.status === 'error') {
+
+                    if (resp.reason === 'field required' && resp.field === 'public_key_hash') {
+                        private_key_say('No key selected');
+                    } else if (handle_error1(resp, private_key_say)) {
+                    }
+
+                } else {
+                }
+            });
+}
+
+function add_user_key() {
+    var node_name = $('#user-key-node-name').val(),
+        public_key_hash = $('#user-key-private-key-select').val();
+
+    squeakclient.local.assign_user_key(
+            {node_name: node_name,
+             public_key_hash: public_key_hash},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    user_key_say('User key added');
+                    update_user_keys();
+
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'field required' && resp.field === 'public_key_hash') {
+                        user_key_say('No key selected');
+                    } else if (handle_error1(resp, user_key_say)) {
+                    }
+
+                } else {
+                }
+            });
+}
+
+function delete_user_keys() {
+    var table = new TableManager($('#user-keys'));
+
+    table.forCheckedRows(
+            function(row) {
+                var node_name = $($(row).children()[1]).text(),
+                    public_key_hash = $($(row).children()[2]).text();
+
+                squeakclient.local.delete_user_key(
+                    {node_name: node_name,
+                     public_key_hash: public_key_hash},
+                    function(resp, textStatus) {
+                        debug(JSON.stringify(resp));
+        
+                        if (resp.status === 'ok') {
+                            user_key_say('User key removed');
+                            //update_user_keys();
+                            $(row).remove();
+                        } else if (resp.status === 'error') {
+                            handle_error1(resp, user_key_say);
+                        } else {
+                        }
+                    });
+            });
+}
+
+function private_key_import_say(mesg) {
+    $('#private-key-import-message').text(mesg);
+}
+
+function import_private_key() {
+    var key_string = $('#private-key-import-text').val(),
+        key_object = null;
+
+    try {
+        key_object = JSON.parse(key_string);
+    } catch(e) {
+        private_key_import_say('Malformed key string');
+        return;
+    }
+
+    var key_type = key_object.key_type,
+        public_key = key_object.public_key,
+        private_key = key_object.private_key,
+        revoke_date = key_object.revoke_date;
+
+    squeakclient.local.import_private_key(
+            {key_type: key_type,
+             public_key: public_key,
+             private_key: private_key,
+             revoke_date: revoke_date},
+            function(resp, textStatus) {
+                if (resp.status === 'ok') {
+                    private_key_import_say('Private key imported');
+                    update_private_keys();
+                } else if (resp.status === 'error') {
+                    handle_error1(error, private_key_import_say);
+                } else {
+                }
+            });
+}
+
+function public_key_say(mesg) {
+    $('#public-key-message').text(mesg);
+}
+
+function delete_public_key() {
+    var public_key_hash = $('#public-keys').val();
+
+    squeakclient.local.delete_public_key(
+            {public_key_hash: public_key_hash},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    public_key_say('Key deleted');
+                    update_public_keys();
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'field required' && resp.field === 'public_key_hash') {
+                        public_key_say('No key selected');
+                    } else if (handle_error1(resp, public_key_say)) {
+                    }
+
+                } else {
+                }
+            });
+}
+
+function export_public_key() {
+    var public_key_hash = $('#public-keys').val();
+
+    squeakclient.local.read_public_key(
+            {public_key_hash: public_key_hash},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var key = resp.key;
+
+                    public_key_say('Key exported');
+                    $('#public-key-export-pkh').text(key.public_key_hash);
+                    $('#public-key-export-key-type').text(key.key_type);
+                    $('#public-key-export-revoke-date').text(key.revoke_date);
+                    $('#public-key-export-public-export').text(JSON.stringify(key));
+                    $('#public-key-export-div').show();
+
+                } else if (resp.status === 'error') {
+
+                    if (resp.reason === 'field required' && resp.field === 'public_key_hash') {
+                        public_key_say('No key selected');
+                    } else if (handle_error1(resp, public_key_say)) {
+                    }
+
+                } else {
+                }
+            });
+}
+
+function public_key_import_say(mesg) {
+    $('#public-key-import-message').text(mesg);
+}
+
+function import_public_key() {
+    var key_text = $('#public-key-import-text').val(),
+        key_object = null;
+
+    try {
+        key_object = JSON.parse(key_text);
+    } catch(e) {
+        public_key_import_say('Malformed key string');
+        return;
+    }
+
+    var public_key_hash = key_object.public_key_hash,
+        key_type = key_object.key_type,
+        revoke_date = key_object.revoke_date,
+        public_key = key_object.public_key;
+
+    squeakclient.local.import_public_key(
+            {public_key_hash: public_key_hash,
+             key_type: key_type,
+             revoke_date: revoke_date,
+             public_key: public_key},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    public_key_import_say('Key Imported');
+                    update_public_keys();
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, public_key_import_say);
+                } else {
+                }
+            });
+}
+
+function user_key_say(mesg) {
+    $('#user-key-message').text(mesg);
+}
+
+/*
+function remove_user_key() {
+    var public_key_hash = $('#user-keys').val();
+
+    squeakclient.local.delete_user_key(
+            {public_key_hash: public_key_hash},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    user_key_say('User key removed');
+                    update_user_keys();
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'field required' && resp.field === 'public_key_hash') {
+                        user_key_say('No key selected');
+                    } else if (handle_error1(resp, user_key_say)) {
+                    } 
+                } else {
+                }
+            });
+}
+*/
+
+function other_user_key_say(mesg) {
+    $('#other-user-key-message').text(mesg);
+}
+
+function assign_other_user_key() {
+    var user_id = $('#other-user-key-user-id').val(),
+        node_name = $('#other-user-key-node-name').val(),
+        public_key_hash = $('#other-user-key-pkh-select').val(),
+        trust_score = $('#other-user-key-trust-score').val();
+
+    squeakclient.local.assign_other_user_key(
+            {other_user_id: user_id,
+             node_name: node_name,
+             public_key_hash: public_key_hash,
+             trust_score: trust_score},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    other_user_key_say('Other user key assigned');
+                    update_other_user_keys();
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, other_user_key_say);
+                } else {
+                }
+            });
+}
+
+function delete_other_user_keys() {
+
+    var other_user_keys_manager = new TableManager($('#other-user-keys'));
+
+    other_user_keys_manager.forCheckedRows(
+            function(row) {
+                var user_id = $($(row).children()[1]).text(),
+                    node_name = $($(row).children()[2]).text(),
+                    public_key_hash = $($(row).children()[3]).text();
+
+                squeakclient.local.delete_other_user_key(
+                    {other_user_id: user_id,
+                     node_name: node_name,
+                     public_key_hash: public_key_hash},
+                    function(resp, textStatus) {
+                        debug(JSON.stringify(resp));
+
+                        if (resp.status === 'ok') {
+                            other_user_key_say('Other user key deleted');
+                            $(row).remove();
+                        } else if (resp.status === 'error') {
+                            handle_error1(resp, other_user_key_say);
+                        } else {
+                        }
+                    });
+            });
+}
+
+function group_keys_say(mesg) {
+    $('#group-keys-message').text(mesg);
+}
+
+function assign_group_key() {
+    var group_id = $('#group-keys-group-id').val(),
+        owner_id = $('#group-keys-owner-id').val(),
+        node_name = $('#group-keys-node-name').val(),
+        key_use = $('#group-keys-key-use').val(),
+        public_key_hash = $('#group-keys-pkh-select').val();
+
+    squeakclient.local.assign_group_key(
+            {group_id: group_id,
+             owner_id: owner_id,
+             node_name: node_name,
+             key_use: key_use,
+             public_key_hash: public_key_hash},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    update_group_keys();
+                    group_keys_say('Group key assigned');
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, group_keys_say);
+                } else {
+                }
+            });
+}
+
+function delete_group_keys() {
+
+    var group_keys_manager = new TableManager($('#group-keys'));
+
+    group_keys_manager.forCheckedRows(
+            function(row) {
+                var group_id = $($(row).children()[1]).text(),
+                    owner_id = $($(row).children()[2]).text(),
+                    node_name = $($(row).children()[3]).text();
+                    key_use = $($(row).children()[4]).text();
+
+                squeakclient.local.delete_group_key(
+                    {group_id: group_id,
+                     owner_id: owner_id,
+                     node_name: node_name,
+                     key_use: key_use},
+                    function(resp, textStatus) {
+                        debug(JSON.stringify(resp));
+
+                        if (resp.status === 'ok') {
+                            group_keys_say('Group key deleted');
+                            $(row).remove();
+                        } else if (resp.status === 'error') {
+                            handle_error1(resp, group_keys_say);
+                        } else {
+                        }
+                    });
+            });
+}
+
+
+function key_type_changed() {
+    var key_type = $('#key-type').val();
+
+    if (key_type === 'dummy') {
+        $('#dummy-parameters').show();
+        $('#pgp-parameters').hide();
+    } else if (key_type === 'pgp') {
+        $('#dummy-parameters').hide();
+        $('#pgp-parameters').show();
+    } else {
+        $('#dummy-parameters').hide();
+        $('#pgp-parameters').hide();
+    }
+}
+
+
+function toggle_next(elt) {
+    $(elt).next().toggle();
+}
+
+window.onload = function() {
+    update_public_keys();
+    update_private_keys();
+    update_user_keys();
+    update_other_user_keys();
+    update_group_keys();
+    key_type_changed();
+};
+
+</script>
+</head>
+<body>
+<span>Key Management</span>
+<a href="home.html">Home</a>
+
+<span id="message" onclick="status_say('');"></span>
+
+<ul>
+<li>
+<span onclick="toggle_next(this);">Public Keys</span>
+<div id="public-keys-div" style="display:none;">
+<select id="public-keys" size="10">
+</select>
+<button onclick="delete_public_key();">
+Delete
+</button>
+<button onclick="export_public_key();">
+Export
+</button> 
+<span id="public-key-message" onclick="public_key_say('');"></span> <br/>
+<ul>
+<li><span onclick="toggle_next(this);">Public Key Export</span>
+<div id="public-key-export-div" style="display:none;">
+<ul>
+<li>Public Key Hash:
+<span id="public-key-export-pkh"></span>
+<li>Key Type:
+<span id="public-key-export-key-type"></span>
+<li>Revoke Date:
+<span id="public-key-export-revoke-date"></span>
+<li>Public Export:
+<textarea id="public-key-export-public-export"></textarea>
+</ul>
+</div>
+
+<li><span onclick="toggle_next(this);">Public Key Import</span>
+<div id="public-key-import-div" style="display:none;">
+<textarea id="public-key-import-text"></textarea>
+<button onclick="import_public_key();">
+Import
+</button>
+<span id="public-key-import-message" onclick="public_key_import_say('');"></span>
+</div>
+</ul>
+</div>
+
+<li>
+<span onclick="toggle_next(this);">Private Keys</span>
+<div id="private-keys-div" style="display:none;">
+<select id="private-keys" size="10">
+</select>
+<button onclick="delete_private_key();">Delete</button>
+<button onclick="export_private_key();">Export</button>
+<span id="private-key-message" onclick="private_key_say('');"></span><br/>
+
+<ul>
+
+<li>
+<span onclick="toggle_next(this);">Private Key Export</span>
+<div id="private-key-export-div" style="display:none;">
+<ul>
+<li>Public Key Hash:
+<span id="private-key-export-pkh"></span>
+<li>Key Type:
+<span id="private-key-export-key-type"></span>
+<li>Revoke Date:
+<span id="private-key-export-revoke-date"></span>
+<li>Public Export:
+<textarea id="private-key-export-public-export"></textarea>
+<li>Private Export:
+<textarea id="private-key-export-private-export"></textarea>
+</ul>
+</div>
+
+<li>
+<span onclick="toggle_next(this);">Private Key Import</span>
+<div id="private-key-import-div" style="display:none;">
+<textarea id="private-key-import-text"></textarea>
+<button onclick="import_private_key();">Import</button>
+<span id="private-key-import-message" onclick="private_key_import_say('');"></span>
+</div>
+
+</ul>
+
+</div>
+
+<li>
+<span onclick="toggle_next(this);">Generate Key</span>
+<div id="gen-keys-div" style="display:none;">
+<label>Key Type:
+<select id="key-type" onchange="key_type_changed();">
+<option value="">Key Type</option>
+<option value="dummy">dummy</option>
+<option value="pgp">pgp</option>
+</select>
+</label><br/>
+
+<div id="dummy-parameters" style="display:none;">
+<!-- blank -->
+</div>
+
+<div id="pgp-parameters" style="display:none;">
+<label>Name-Real: <input class="name-real"></input> </label><br/>
+<label>Name-Email: <input class="name-email"></input> </label><br/>
+<label>Expire-Date: <input class="expire-date"></input> </label><br/>
+<label>Key-Type: <input class="key-type"></input> </label><br/>
+<label>Key-Length: <input class="key-length"></input> </label><br/>
+<label>Key-Usage: <input class="key-usage"></input> </label><br/>
+<label>Subkey-Type: <input class="subkey-type"></input> </label><br/>
+<label>Subkey-Length: <input class="subkey-length"></input> </label><br/>
+<label>Subkey-Usage: <input class="subkey-usage"></input> </label><br/>
+</div>
+
+
+<!--
+<label>Key Parameters:
+<textarea id="key_parameters"></textarea>
+</label><br/>
+ -->
+<label>Revoke Date:
+<input id="revoke_date" type="text"> </input>
+</label><br/>
+<label>Passphrase:
+<input id="passphrase" type="password"> </input>
+</label><br/>
+<label>Passphrase Check:
+<input id="passphrase2" type="password"> </input>
+</label><br/>
+<button id="gen_key_button" onclick="gen_priv_key();">
+Generate
+</button>
+<span id="key_gen_message" onclick="key_gen_say('');"></span>
+</div>
+
+<li>
+<span onclick="toggle_next(this);">User Keys</span>
+<div id="user-keys-div" style="display:none;">
+<table>
+<tbody>
+<tr>
+<td><button onclick="delete_user_keys();">Del</button>
+<td>Node Name
+<td>Public Key Hash
+</tr>
+</tbody>
+<tbody id="user-keys">
+</tbody>
+<tbody>
+<td><button onclick="add_user_key();">Add</button>
+<td><input id="user-key-node-name"></input>
+<td><select id="user-key-private-key-select">
+<option></option>
+<optgroup id="user-key-private-key">
+</optgroup>
+</select>
+</tbody>
+<tbody>
+</tbody>
+</table>
+
+
+</div>
+
+
+<li>
+<span onclick="toggle_next(this);">Other User Keys</span>
+<div id="other-user-keys-div" style="display:none;">
+<table>
+<tbody>
+<tr>
+<td><button onclick="delete_other_user_keys();">Del</button>
+<td>User Id
+<td>Node Name
+<td>Public Key Hash
+<td>Trust Score
+</tr>
+</tbody>
+<tbody id="other-user-keys">
+</tbody>
+<tbody>
+<tr>
+<td><button onclick="assign_other_user_key();">Add</button>
+<td><input id="other-user-key-user-id"></input>
+<td><input id="other-user-key-node-name"></input>
+<td><select id="other-user-key-pkh-select">
+<option value="">Public Key</option>
+<optgroup id="other-user-key-pkh"></optgroup>
+</select>
+<td><input id="other-user-key-trust-score"></input>
+</tr>
+</tbody>
+</table>
+<span id="other-user-key-message" onclick="other_user_key_say('');"></span>
+</div>
+
+<li>
+<span onclick="toggle_next(this);">Group Keys</span>
+<div id="group-keys-div" style="display:none;">
+<table>
+<tbody>
+<tr>
+<td><button onclick="delete_group_keys();">Del</button>
+<td>Group Id
+<td>Owner Id
+<td>Node Name
+<td>Key Use
+<td>Public Key Hash
+</tr>
+</tbody>
+<tbody id="group-keys">
+</tbody>
+<tbody>
+<tr>
+<td><button onclick="assign_group_key();">Add</button>
+<td><input id="group-keys-group-id"></input>
+<td><input id="group-keys-owner-id"></input>
+<td><input id="group-keys-node-name"></input>
+<td><select id="group-keys-key-use">
+<option value="">Key Use</option>
+<option value="post">post</option>
+<option value="read">read</option>
+<option value="delete">delete</option>
+</select>
+<td>
+<select id="group-keys-pkh-select">
+<option value="">Private Key</option>
+<optgroup id="group-keys-pkh">
+</optgroup>
+</select>
+</tr>
+</tbody>
+</table>
+<span id="group-keys-message" onclick="group_keys_say('');"></span>
+</div>
+
+</ul>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

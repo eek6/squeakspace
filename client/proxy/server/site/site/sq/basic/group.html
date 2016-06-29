@@ -1,0 +1,291 @@
+<html>
+<head>
+<title>
+Group
+</title>
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/tablemanager-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/taskqueue-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/passphrasedialog.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+function status_say(mesg) {
+    $('#status-message').text(mesg);
+}
+
+pass_dialog = null;
+post_table = null;
+
+params = querystring.load();
+
+function read_access_step(group_id, owner_id, node_name, use, on_ok) {
+
+    var try_again = function() {
+            read_access_step(group_id, owner_id, node_name, use, on_ok);
+        };
+
+    squeakclient.proxy.read_group_access(
+            {group_id: group_id,
+             owner_id: owner_id,
+             node_name: node_name,
+             use: use},
+            function(resp, textStatus) {
+                 debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    resp = resp.resp;
+
+                    if (resp.status === 'ok') {
+                        on_ok();
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, status_say);
+                    } else {
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, status_say, use, pass_dialog, try_again);
+                } else {
+                }
+            });
+}
+
+
+function load_post_list() {
+    var node_name = params.node,
+        group_id = params.group,
+        owner_id = params.owner,
+        start_time = params.start_time || null,
+        end_time = params.end_time || null,
+        max_records = params.max_records || null,
+        order = params.order || null,
+        passphrase = null,
+        on_ok = function() {
+            squeakclient.proxy.read_post_list(
+                    {node_name: node_name,
+                     group_id: group_id,
+                     owner_id: owner_id,
+                     start_time: start_time,
+                     end_time: end_time,
+                     max_records: max_records,
+                     order: order,
+                     passphrase: passphrase},
+                    function(resp, textStatus) {
+                        debug(JSON.stringify(resp));
+        
+                        if (resp.status === 'ok') {
+                            resp = resp.resp;
+        
+                            if (resp.status === 'ok') {
+                                var post_list = resp.post_list,
+                                    length = post_list.length,
+                                    i = 0;
+        
+                                post_table.clear();
+        
+                                for ( ; i < length; i++ ) {
+                                    var post = post_list[i],
+                                        post_params = {node: node_name,
+                                                       group: group_id,
+                                                       owner: owner_id,
+                                                       id: post.post_id},
+                                        post_url = 'post.html?' + $.param(post_params),
+                                        link = $('<a>').attr('href', post_url)
+                                                       .append(post.timestamp);
+        
+                                    post_table.addRow(
+                                            [link,
+                                             post.post_id,
+                                             post.data_hash,
+                                             post.post_signature,
+                                             post.proof_of_work]);
+                                }
+        
+                            } else if (resp.status === 'error') {
+                                handle_error1(resp, status_say);
+                            } else {
+                            }
+        
+                        } else if (resp.status === 'error') {
+                            handle_error2(resp, status_say, 'reading', pass_dialog, load_post_list);
+                        } else {
+                        }
+                    });
+        };
+
+    read_access_step(group_id, owner_id, node_name, 'read', on_ok);
+}
+
+
+function delete_post(row, node_name, group_id, owner_id, post_id, passphrase) {
+
+    var try_again = function() {
+        delete_post(row, node_name, group_id, owner_id, post_id, passphrase);
+    };
+
+
+    squeakclient.proxy.delete_post(
+            {node_name: node_name,
+             group_id: group_id,
+             owner_id: owner_id,
+             post_id: post_id,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    resp = resp.resp;
+
+                    if (resp.status === 'ok') {
+                        $(row).remove();
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, status_say);
+                    } else {
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, status_say, 'delete', pass_dialog, try_again);
+                } else {
+                }
+            });
+}
+
+function delete_posts() {
+
+    var node_name = params.node,
+        group_id = params.group,
+        owner_id = params.owner,
+        passphrase = null,
+        on_ok = function() {
+            post_table.forCheckedRows(
+                    function(row) {
+                        var post_id = $($(row).children()[2]).text();
+        
+                        delete_post(row, node_name, group_id, owner_id, post_id, passphrase);
+                    });
+        };
+
+    read_access_step(group_id, owner_id, node_name, 'delete', on_ok);
+}
+
+function make_post() {
+
+    var node_name = params.node,
+        group_id = params.group,
+        owner_id = params.owner,
+        data = $('#post-textarea').val(),
+        passphrase = null,
+        force_encryption = $('#force-encryption').prop('checked'),
+        on_ok = function() {
+            squeakclient.proxy.make_post(
+                    {node_name: node_name,
+                     group_id: group_id,
+                     owner_id: owner_id,
+                     data: data,
+                     passphrase: passphrase,
+                     force_encryption: force_encryption},
+                    function(resp, textStatus) {
+                        debug(JSON.stringify(resp));
+        
+                        if (resp.status === 'ok') {
+                            resp = resp.resp;
+        
+                            if (resp.status === 'ok') {
+                                status_say('Post submitted');
+                                $('#post-textarea').val('');
+                                load_post_list();
+        
+                            } else if (resp.status === 'error') {
+                                handle_error1(resp, status_say);
+                            } else {
+                            }
+        
+                        } else if (resp.status === 'error') {
+                            handle_error2(resp, status_say, 'posting', pass_dialog, make_post);
+                        } else {
+                        }
+                    });
+        };
+
+    read_access_step(group_id, owner_id, node_name, 'post', on_ok);
+}
+
+window.onload = function() {
+
+    pass_dialog = PassphraseDialog.defaultUi($('#passphrase-div'), handle_error1);
+    pass_dialog.initUi();
+
+    post_table = new TableManager($('#post-list'));
+
+    if (params !== null) {
+        $('#node-name').text(params.node);
+        $('#group-name').text(params.group);
+        $('#owner-name').text(params.owner);
+    }
+
+    load_post_list();
+}
+
+
+
+</script>
+</head>
+<body>
+Group
+<a href="home.html">Home</a>
+
+<span id="node-name"></span>
+<span id="owner-name"></span>
+<span id="group-name"></span>
+
+<div id="passphrase-div" style="display:none;">
+<span>Enter passphrase for
+<span class="key-purpose"></span>
+key: <span class="public-key-hash"></span>
+</span>
+<div>
+<label>Passphrase: <input class="passphrase" type="password"></input></label>
+<label>Cache Minutes: <input class="cache-period"></input></label>
+<button class="enter">Enter</button>
+<span class="message"></span>
+</div>
+</div>
+
+
+<div id="make-post-div">
+<label>
+<textarea id="post-textarea">
+</textarea>
+</label>
+<button onclick="make_post();">Post</button>
+<label>Force Encryption:
+<input id="force-encryption" type="checkbox" checked="true"></input>
+</label>
+</div>
+
+<span id="status-message" onclick="status_say('');"></span>
+
+<table id="post-list-table">
+<tbody>
+<tr>
+<td><button id="delete-button" onclick="delete_posts();">Del</button>
+<td>Timestamp
+<td>Post ID
+<td>Data Hash
+<td>Post Signature
+<td>Proof of Work
+</tr>
+</tbody>
+<tbody id="post-list">
+</tbody>
+</table>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,591 @@
+<html>
+<head>
+<title>
+Account
+</title>
+<style>
+.pow-div{display:none;}
+.dummy-div{display:none;}
+.hashcash-div{display:none;}
+</style>
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/tablemanager-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/taskqueue-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/passphrasedialog.js"></script>
+<script type="text/javascript" src="/lib/accessselect.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+function delete_say(mesg) {
+    $('#delete-message').text(mesg);
+}
+
+function change_user_quota_say(mesg) {
+    $('#user-quota-say').text(mesg);
+}
+
+function change_mail_quota_say(mesg) {
+    $('#mail-quota-say').text(mesg);
+}
+
+
+pass_dialog = null;
+
+params = querystring.load();
+
+
+function load_user_keys() {
+    var node_name = params.node,
+        option_list = $('#set-message-access-from-key-list');
+
+    squeakclient.local.list_other_user_keys(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0;
+
+                    option_list.children().remove();
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i];
+
+                        if (key.node_name === node_name) {
+                            $('<option>').text(key.user_id + ', ' + key.public_key_hash)
+                                         .val(key.public_key_hash)
+                                         .appendTo(option_list);
+                        }
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, null);
+                } else {
+                }
+            });
+        
+}
+
+function clear_user_account() {
+    var message_access_table = new TableManager($('#message-access-list')),
+        groups_list_dom = $('#groups-list');
+
+    $('#user_id').text('');
+    $('#default-key-hash').text('');
+
+    $('#user-quota').find('.quota-allocated').val('');
+    $('#user-quota').find('.quota-used').text('');
+
+    $('#mail-quota').find('.quota-allocated').val('');
+    $('#mail-quota').find('.quota-used').text('');
+    $('#mail-quota').find('.when-space-exhausted').val('');
+
+    $('#num-keys').text('');
+
+    $('#default-message-access').text('');
+    $('#last-message-time').text('');
+
+    message_access_table.clear();
+    groups_list_dom.children().remove();
+}
+
+function load_user_account() {
+    var node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null,
+        message_access_table = new TableManager($('#message-access-list')),
+        groups_list_dom = $('#groups-list');
+
+    squeakclient.proxy.read_user(
+            {node_name: node_name,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        var user = proxy_resp.user,
+                            message_access_list = user.message_access_list,
+                            length = message_access_list.length,
+                            i = 0,
+                            groups_list = user.groups_list;
+
+                        $('#user-id').text(user.user_id);
+                        $('#default-key-hash').text(user.default_key_hash);
+
+                        $('#user-quota').find('.quota-allocated').val(user.user_quota.quota_allocated);
+                        $('#user-quota').find('.quota-used').text(user.user_quota.quota_used);
+
+                        $('#mail-quota').find('.quota-allocated').val(user.mail_quota.quota_allocated);
+                        $('#mail-quota').find('.quota-used').text(user.mail_quota.quota_used);
+                        $('#mail-quota').find('.when-space-exhausted').val(user.mail_quota.when_space_exhausted);
+
+                        $('#num-keys').text(user.num_keys);
+
+                        $('#default-message-access').text(user.default_message_access);
+                        $('#last-message-time').text(user.last_message_time);
+
+                        message_access_table.clear();
+
+                        for ( ; i < length; i++ ) {
+                            var message_access = message_access_list[i];
+                            message_access_table.addRow(
+                                    [message_access.from_key_hash,
+                                     message_access.access]);
+                        }
+
+                        length = groups_list.length;
+
+                        groups_list_dom.children().remove();
+                        
+                        for ( i = 0; i < length; i++ ) {
+                            var group_id = groups_list[i];
+
+                            $('<li>').text(group_id).appendTo(groups_list_dom);
+                        }
+
+                    } else if (proxy_resp.status === 'error') {
+                        handle_error1(resp, null);
+                    } else {
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, null, "node key", pass_dialog, load_user_account);
+                } else {
+                }
+            });
+}
+
+function delete_user_account() {
+    var node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null;
+
+    squeakclient.proxy.delete_user(
+            {node_name: node_name,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    resp = resp.resp;
+
+                    if (resp.status === 'ok') {
+                        delete_say('Account deleted');
+                        $('#account-div').hide();
+
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, null);
+                    } else {
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, null, "node key", pass_dialog, load_user_account);
+                } else {
+                }
+            });
+}
+
+function set_default_message_access_say(mesg) {
+    $('#set-default-message-access-message').text(mesg);
+}
+
+function set_message_access_say(mesg) {
+    $('#set-message-access-message').text(mesg);
+}
+
+function set_message_access() {
+    var node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null,
+        from_user_key_hash = $('#set-message-access-from-key').val(),
+        access = message_access_select.value();
+
+    if (access !== null) {
+
+        squeakclient.proxy.set_message_access(
+                {node_name: node_name,
+                 from_user_key_hash: from_user_key_hash,
+                 access: access,
+                 public_key_hash: public_key_hash,
+                 passphrase: passphrase},
+                function(resp, textStatus) {
+                    debug(JSON.stringify(resp));
+
+                    if (resp.status === 'ok') {
+                        resp = resp.resp;
+
+                        if (resp.status === 'ok') {
+                            set_message_access_say('Message Access Set');
+
+                            clear_user_account();
+                            load_user_account();
+                        } else if (resp.status === 'error') {
+                            handle_error1(resp, set_message_access_say);
+                        } else {
+                        }
+
+                    } else if (resp.status === 'error') {
+                        handle_error2(resp, set_message_access_say, "node key", pass_dialog, set_message_access);
+                    } else {
+                    }
+                });
+    }
+}
+
+function set_default_message_access() {
+    var node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null,
+        from_user_key_hash = null,
+        access = default_message_access_select.value();
+
+    if (access !== null) {
+
+        squeakclient.proxy.set_message_access(
+                {node_name: node_name,
+                 from_user_key_hash: from_user_key_hash,
+                 access: access,
+                 public_key_hash: public_key_hash,
+                 passphrase: passphrase},
+                function(resp, textStatus) {
+                    debug(JSON.stringify(resp));
+
+                    if (resp.status === 'ok') {
+                        resp = resp.resp;
+
+                        if (resp.status === 'ok') {
+                            set_default_message_access_say('Message Access Set');
+
+                            clear_user_account();
+                            load_user_account();
+                        } else if (resp.status === 'error') {
+                            handle_error1(resp, set_default_message_access_say);
+                        } else {
+                        }
+
+                    } else if (resp.status === 'error') {
+                        handle_error2(resp, set_default_message_access_say, "node key", pass_dialog, set_default_message_access);
+                    } else {
+                    }
+                });
+    }
+}
+
+function change_user_quota() {
+
+    var node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null,
+        new_size_text = $('#user-quota').find('.quota-allocated').val(),
+        user_class = $('#user-quota').find('.user-class').val(),
+        auth_token = $('#user-quota').find('.auth-token').val(),
+        new_size = parseInt(new_size_text);
+
+    if (isNaN(new_size)) {
+        change_user_quota_say('Quota allocated must be an integer');
+    }
+    else {
+        squeakclient.proxy.change_user_quota(
+                {node_name: node_name,
+                 new_size: new_size,
+                 user_class: user_class,
+                 auth_token: auth_token,
+                 public_key_hash: public_key_hash,
+                 passphrase: passphrase},
+                function(resp, textStatus) {
+                    debug(JSON.stringify(resp));
+    
+                    if (resp.status === 'ok') {
+                        resp = resp.resp;
+    
+                        if (resp.status === 'ok') {
+                            change_user_quota_say('User quota changed');
+
+                            clear_user_account();
+                            load_user_account();
+                        } else if (resp.status === 'error') {
+                            handle_error1(resp, change_user_quota_say);
+
+                            clear_user_account();
+                            load_user_account();
+                        } else {
+                        }
+                    } else if (resp.status === 'error') {
+                        handle_error2(resp, change_user_quota_say, "node key", pass_dialog, change_user_quota);
+                    } else {
+                    }
+                });
+    }
+}
+
+function change_mail_quota() {
+
+    var node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null,
+        new_size_text = $('#mail-quota').find('.quota-allocated').val(),
+        when_space_exhausted = $('#mail-quota').find('.when-space-exhausted').val(),
+        new_size = parseInt(new_size_text);
+
+    if (isNaN(new_size)) {
+        change_mail_quota_say('Quota allocated must be an integer');
+    }
+    else {
+        squeakclient.proxy.change_message_quota(
+                {node_name: node_name,
+                 new_size: new_size,
+                 when_space_exhausted: when_space_exhausted,
+                 public_key_hash: public_key_hash,
+                 passphrase: passphrase},
+                function(resp, textStatus) {
+                    debug(JSON.stringify(resp));
+    
+                    if (resp.status === 'ok') {
+                        resp = resp.resp;
+    
+                        if (resp.status === 'ok') {
+                            change_mail_quota_say('Mail quota changed');
+
+                            clear_user_account();
+                            load_user_account();
+                        } else if (resp.status === 'error') {
+                            handle_error1(resp, change_mail_quota_say);
+
+                            clear_user_account();
+                            load_user_account();
+                        } else {
+                        }
+                    } else if (resp.status === 'error') {
+                        handle_error2(resp, change_mail_quota_say, "node key", pass_dialog, change_mail_quota);
+                    } else {
+                    }
+                });
+    }
+}
+
+
+
+
+function delete_message_access(row, node_name, from_user_key_hash, public_key_hash, passphrase) {
+    var retry = function() {
+        return delete_message_access(row, node_name, from_user_key_hash, public_key_hash, passphrase);
+    }
+
+    squeakclient.proxy.delete_message_access(
+            {node_name: node_name,
+             from_user_key_hash: from_user_key_hash,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    resp = resp.resp;
+
+                    if(resp.status === 'ok') {
+                        set_message_access_say('Access Entry Deleted');
+                        $(row).remove();
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, set_message_access_say);
+                    } else {
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, set_message_access_say, "node key", pass_dialog, retry);
+                } else {
+                }
+            });
+}
+
+function delete_message_accesses() {
+    var message_access_table = new TableManager($('#message-access-list')),
+        node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null;
+
+    message_access_table.forCheckedRows(
+            function(row) {
+                var from_user_key_hash = $($(row).children()[1]).text();
+
+                delete_message_access(row, node_name, from_user_key_hash, public_key_hash, passphrase);
+            });
+}
+
+
+window.onload = function() {
+
+    pass_dialog = PassphraseDialog.defaultUi($('#passphrase-div'), handle_error1);
+    pass_dialog.initUi();
+
+    message_access_select = AccessSelect.defaultUI($('#set-message-access-div'));
+    message_access_select.initUI();
+
+    default_message_access_select = AccessSelect.defaultUI($('#set-default-message-access-div'));
+    default_message_access_select.initUI();
+
+    if (params !== null) {
+        $('#node-name').text(params.node);
+    }
+
+    load_user_account();
+    load_user_keys();
+}
+
+</script>
+</head>
+<body>
+Node Account
+<a href="home.html">Home</a>
+
+<div>
+<span id="node-name"></span>
+
+<div id="passphrase-div" style="display:none;">
+<span>Enter passphrase for
+<span class="key-purpose"></span>
+key: <span class="public-key-hash"></span>
+</span>
+<div>
+<label>Passphrase: <input class="passphrase" type="password"></input></label>
+<label>Cache Minutes: <input class="cache-period"></input></label>
+<button class="enter">Enter</button>
+<span class="message"></span>
+</div>
+</div>
+
+<div id="account-div">
+<ul>
+<li>User ID: <span id="user-id"></span>
+<li>Default Key Hash: <span id="default-key-hash"></span>
+<li>User Quota
+  <ul id="user-quota">
+  <li> Quota Allocated: <input class="quota-allocated"></input>
+  <li> Quota Used: <span class="quota-used"></span>
+  <li> User Class: <input class="user-class"></input>
+  <li> Auth Token: <input class="auth-token"></input>
+       <button onclick="change_user_quota();">Set</button>
+       <span id="user-quota-say" onclick="change_user_quota_say('');"></span>
+  </ul>
+<li>Mail Quota
+  <ul id="mail-quota">
+  <li> Quota Allocated: <input class="quota-allocated"></input>
+  <li> Quota Used: <span class="quota-used"></span>
+  <li> When Space Exhausted:
+       <select class="when-space-exhausted">
+         <option value=""></option>
+         <option value="block">Block</option>
+         <option value="free_oldest">Free Oldest</option>
+       </select>
+       <button onclick="change_mail_quota();">Set</button>
+       <span id="mail-quota-say" onclick="change_mail_quota_say('');"></span>
+  </ul>
+<li>Number of Keys: <span id="num-keys"></span>
+<li>Default Message Access: <span id="default-message-access"></span>
+
+<div id="set-default-message-access-div">
+<label>Set Default Message Access:
+<select class="access-select"></select>
+</label>
+<div class="pow-div">
+<label>Algorithm:
+<select class="pow-alg-select"></select>
+</label>
+<span class="message"></span>
+<div class="dummy-div">
+<label>Level:
+<input class="dummy-level"></input>
+</label>
+</div>
+<div class="hashcash-div">
+<label>Bits:
+<input class="hashcash-bits"></input>
+</label>
+<label>Salt chars:
+<input class="hashcash-saltchars"></input>
+</label>
+</div>
+</div>
+
+<button onclick="set_default_message_access();">Set</button>
+<span id="set-default-message-access-message" onclick="set_default_message_access_say('');"></span>
+</div>
+
+
+<li>Last Message Time: <span id="last-message-time"></span>
+<li>Groups:
+  <ul id="groups-list">
+  </ul>
+
+<li>Message Access List:
+<table>
+<tbody>
+<tr>
+<td><button onclick="delete_message_accesses();">Del</button>
+<td>From Key Hash
+<td>Message Access
+</tr>
+</tbody>
+<tbody id="message-access-list">
+</tbody>
+</table>
+
+<li>Add Message Access:
+
+<div id="set-message-access-div">
+<label>From Key Hash:
+<select id="set-message-access-from-key">
+<option value="">Default<option>
+<optgroup id="set-message-access-from-key-list">
+</optgroup>
+</select>
+</label>
+
+<label>Message Access:
+<select class="access-select"></select>
+</label>
+<div class="pow-div">
+<label>Algorithm:
+<select class="pow-alg-select"></select>
+</label>
+<span class="message"></span>
+<div class="dummy-div">
+<label>Level:
+<input class="dummy-level"></input>
+</label>
+</div>
+<div class="hashcash-div">
+<label>Bits:
+<input class="hashcash-bits"></input>
+</label>
+<label>Salt chars:
+<input class="hashcash-saltchars"></input>
+</label>
+</div>
+</div>
+
+<button onclick="set_message_access();">Set</button>
+<span id="set-message-access-message" onclick="set_message_access_say('');"></span>
+</div>
+
+</ul>
+
+<button onclick="delete_user_account();">Delete Node Account</button>
+</div>
+<span id="delete-message" onclick="delete_say('');"></span>
+
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

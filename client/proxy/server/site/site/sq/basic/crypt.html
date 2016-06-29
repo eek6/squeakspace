@@ -1,0 +1,322 @@
+<html>
+<head>
+<title>
+Crypt
+</title>
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/taskqueue-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/passphrasedialog.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+pass_dialog = null;
+
+
+function status_say(mesg) {
+    $('#message').text(mesg);
+}
+
+function load_keys() {
+    squeakclient.local.list_public_keys(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys;
+
+                    refresh_select($('.public-key-list'), keys);
+
+                    squeakclient.local.list_private_keys(
+                            {},
+                            function(resp, textStatus) {
+                                debug(JSON.stringify(resp));
+                
+                                if (resp.status === 'ok') {
+                                    var keys = resp.keys;
+                
+                                    refresh_select($('.private-key-list'), keys);
+                                    append_select($('.public-key-list'), keys);
+                                } else if (resp.status === 'error') {
+                                    handle_error1(resp, status_say);
+                                } else {
+                                }
+                            });
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, status_say);
+                } else {
+                }
+            });
+}
+
+function json_decode_say(mesg) {
+    $('#json-decode-message').text(mesg);
+}
+
+function json_decode() {
+    var obj = null,
+        div = $('#json-decode-div'),
+        string = div.find('.input').val();
+
+    try {
+        obj = JSON.parse(string);
+    } catch(e) {
+        json_decode_say('Malformed json');
+        return;
+    }
+
+    div.find('.output').val(obj);
+    json_decode_say('Decoded');
+}
+
+function json_encode_say(mesg) {
+    $('#json-encode-message').text(mesg);
+}
+
+function json_encode() {
+    var div = $('#json-encode-div'),
+        string = div.find('.input').val(),
+        encoded = JSON.stringify(string);
+
+    div.find('.output').val(encoded);
+    json_encode_say('Encoded');
+}
+
+function encrypt_say(mesg) {
+    $('#encrypt-message').text(mesg);
+}
+
+function encrypt() {
+    var div = $('#encrypt-div'),
+        public_key_hash = div.find('.public-key').val(),
+        plaintext = div.find('.plaintext').val();
+
+    squeakclient.local.crypt.encrypt(
+            {public_key_hash: public_key_hash,
+             plaintext: plaintext},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var ciphertext = resp.ciphertext;
+
+                    div.find('.ciphertext').val(ciphertext);
+                    encrypt_say('Done');
+
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, encrypt_say);
+                } else {
+                }
+            });
+}
+
+function decrypt_say(mesg) {
+    $('#decrypt-message').text(mesg);
+}
+
+function decrypt() {
+    var div = $('#decrypt-div'),
+        public_key_hash = div.find('.private-key').val(),
+        ciphertext = div.find('.ciphertext').val(),
+        passphrase = null;
+
+    squeakclient.local.crypt.decrypt(
+            {public_key_hash: public_key_hash,
+             ciphertext: ciphertext,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var plaintext = resp.plaintext;
+
+                    div.find('.plaintext').val(plaintext);
+                    decrypt_say('Done');
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, decrypt_say, 'decryption', pass_dialog, decrypt);
+                } else {
+                }
+            });
+}
+
+function verify_say(mesg) {
+    $('#verify-message').text(mesg);
+}
+
+function verify_signature() {
+    var div = $('#verify-div'),
+        public_key_hash = div.find('.public-key').val(),
+        data = div.find('.data').val(),
+        signature = div.find('.signature').val();
+
+    squeakclient.local.crypt.verify_signature(
+            {public_key_hash: public_key_hash,
+             data: data,
+             signature: signature},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    if (resp.valid) {
+                        verify_say('Signature ok');
+                    } else {
+                        verify_say('Signature invalid');
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, verify_say);
+                } else {
+                }
+            });
+}
+
+function sign_say(mesg) {
+    $('#sign-message').text(mesg);
+}
+
+function sign() {
+    var div = $('#sign-div'),
+        public_key_hash = div.find('.private-key').val(),
+        data = div.find('.data').val(),
+        passphrase = null;
+
+    squeakclient.local.crypt.sign(
+            {public_key_hash: public_key_hash,
+             data: data,
+             passphrase: null},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var signature = resp.signature;
+
+                    div.find('.signature').val(signature);
+                    sign_say('Signature created');
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, sign_say, 'signing', pass_dialog, sign);
+                } else {
+                }
+            });
+}
+
+
+function toggle_next(elt) {
+    $(elt).next().toggle();
+}
+
+window.onload = function() {
+
+    pass_dialog = PassphraseDialog.defaultUi($('#passphrase-div'), handle_error1);
+    pass_dialog.initUi();
+
+    load_keys();
+};
+
+</script>
+</head>
+<body>
+<span>Crypt</span>
+<a href="home.html">Home</a>
+
+<div id="passphrase-div" style="display:none;">
+<span>Enter passphrase for
+<span class="key-purpose"></span>
+key: <span class="public-key-hash"></span>
+</span>
+<div>
+<label>Passphrase: <input class="passphrase" type="password"></input></label>
+<label>Cache Minutes: <input class="cache-period"></input></label>
+<button class="enter">Enter</button>
+<span class="message"></span>
+</div>
+</div>
+
+<span id="message" onclick="status_say('');"></span>
+
+<ul>
+<li>
+<span onclick="toggle_next(this);">JSON Encode</span>
+<div id="json-encode-div" style="display:none;">
+<label>Input: <textarea class="input"></textarea></label>
+<button onclick="json_encode();">Encode</button>
+<span id="json-encode-message" onclick="json_encode_say('');"></span><br/>
+<label>Output: <textarea class="output" readonly="true"></textarea></label>
+</div>
+
+<li>
+<span onclick="toggle_next(this);">JSON Decode</span>
+<div id="json-decode-div" style="display:none;">
+<label>Input: <textarea class="input"></textarea></label>
+<button onclick="json_decode();">Decode</button>
+<span id="json-decode-message" onclick="json_decode_say('');"></span><br/>
+<label>Output: <textarea class="output" readonly="true"></textarea></label>
+</div>
+
+<li><span onclick="toggle_next(this);">Encrypt</span>
+<div id="encrypt-div" style="display:none;">
+<label>Public Key:
+<select class="public-key">
+<option></option>
+<optgroup class="public-key-list"></optgroup>
+</select>
+</label><br/>
+<label>Plaintext: <textarea class="plaintext"></textarea></label>
+<button onclick="encrypt();">Encrypt</button>
+<span id="encrypt-message" onclick="encrypt_say('');"></span><br/>
+<label>Ciphertext: <textarea class="ciphertext" readonly="true"></textarea></label>
+</div>
+
+<li><span onclick="toggle_next(this);">Decrypt</span>
+<div id="decrypt-div" style="display:none;">
+<label>Private Key:
+<select class="private-key">
+<option></option>
+<optgroup class="private-key-list"></optgroup>
+</select>
+</label><br/>
+<label>Ciphertext: <textarea class="ciphertext"></textarea></label>
+<button onclick="decrypt();">Decrypt</button>
+<span id="decrypt-message" onclick="decrypt_say('');"></span><br/>
+<label>Plaintext: <textarea class="plaintext" readonly="true"></textarea></label>
+</div>
+
+<li><span onclick="toggle_next(this);">Verify Signature</span>
+<div id="verify-div" style="display:none;">
+<label>Public Key:
+<select class="public-key">
+<option></option>
+<optgroup class="public-key-list"></optgroup>
+</select>
+</label><br/>
+<label>Signed Data: <textarea class="data"></textarea></label><br/>
+<label>Signature: <textarea class="signature"></textarea></label>
+<button onclick="verify_signature();">Check</button>
+<span id="verify-message" onclick="verify_say('');"></span><br/>
+</div>
+
+<li><span onclick="toggle_next(this);">Sign</span>
+<div id="sign-div" style="display:none;">
+<label>Private Key:
+<select class="private-key">
+<option></option>
+<optgroup class="private-key-list"></optgroup>
+</select>
+</label><br/>
+<label>Data: <textarea class="data"></textarea></label>
+<button onclick="sign();">Sign</button>
+<span id="sign-message" onclick="sign_say('');"></span><br/>
+<label>Signature: <textarea class="signature" readonly="true"></textarea></label><br/>
+</div>
+
+</ul>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

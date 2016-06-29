@@ -1,0 +1,226 @@
+<html>
+<head>
+<title>
+Register
+</title>
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/accessselect.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<style>
+.pow-div{display:none;}
+.dummy-div{display:none;}
+.hashcash-div{display:none;}
+</style>
+<script type="text/javascript">
+
+function register_say(mesg) {
+    $('#register-message').text(mesg);
+}
+
+function handle_error_resp(resp, say) {
+    if (resp.reason === 'bad session id') {
+        window.location = 'login.html';
+        return true;
+    } else if (say && resp.reason === 'field required') {
+        say('Field required: ' + resp.field);
+    } else if (say) {
+        say(resp.reason)
+    }
+
+    return false;
+}
+
+function update_node_names() {
+
+    var node_name_list = $('#node-name-list');
+
+    squeakclient.local.list_node_addr(
+            {},
+            function (resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var node_addrs = resp.addrs,
+                        get = function(node_addr) {
+                                return node_addr.node_name;
+                            };
+
+                    refresh_select(node_name_list, node_addrs, get);
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, register_say);
+                } else {
+                }
+            });
+}
+
+function update_private_keys() {
+    var node_name = $('#node-name').val(),
+        private_key_list = $('#private-key-list');
+
+    if (node_name === '') {
+        private_key_list.children().remove();
+    } else {
+        squeakclient.local.list_user_keys(
+                {node_name: node_name},
+                function(resp, textStatus) {
+                    debug(JSON.stringify(resp));
+    
+                    if (resp.status === 'ok') {
+                        var keys = resp.keys,
+                            get = function(key) {
+                                return key.public_key_hash;
+                            };
+    
+                        refresh_select(private_key_list, keys, get);
+    
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, register_say);
+                    } else {
+                    }
+                });
+    }
+}
+
+default_message_access_select = null;
+
+function register() {
+    var node_name = $('#node-name').val(),
+        private_key = $('#private-key').val(),
+        default_message_access = default_message_access_select.value(),
+        when_mail_exhausted = $('#when-mail-exhausted').val(),
+        quota_size = $('#quota-size').val(),
+        mail_quota_size = $('#mail-quota-size').val(),
+        user_class = $('#user-class').val(),
+        auth_token = $('#auth-token').val();
+
+    if (default_message_access !== null) {
+
+        squeakclient.proxy.create_user(
+                {node_name: node_name,
+                 public_key_hash: private_key,
+                 default_message_access: default_message_access,
+                 when_mail_exhausted: when_mail_exhausted,
+                 quota_size: quota_size,
+                 mail_quota_size: mail_quota_size,
+                 user_class: user_class,
+                 auth_token: auth_token},
+
+                function(resp, textStatus) {
+                    debug(JSON.stringify(resp));
+
+                    if (resp.status === 'ok') {
+                        proxy_resp = resp.resp;
+
+                        if (proxy_resp.status === 'ok') {
+                            register_say('Account created.');
+                        } else if (proxy_resp.status === 'error') {
+                            handle_error1(proxy_resp, register_say);
+                        } else {
+                        }
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, register_say);
+                    } else {
+                    }
+                });
+    }
+}
+
+window.onload = function() {
+
+    var div = $('#default-message-access-div');
+
+    default_message_access_select = AccessSelect.defaultUI(div);
+    default_message_access_select.initUI();
+
+    update_node_names();
+}
+
+</script>
+</head>
+<span>Register</span>
+<a href="home.html">Home</a>
+
+
+<div id="form-div">
+<label>Node:
+<select id="node-name" onchange="update_private_keys();">
+<option></option>
+<optgroup id="node-name-list">
+</optgroup>
+</select>
+</label>
+
+<label>Private Key:
+<select id="private-key">
+<option></option>
+<optgroup id="private-key-list">
+</optgroup>
+</select>
+</label>
+
+<div id="default-message-access-div">
+<label>Default Message Access:
+<select class="access-select"></select>
+</label>
+<div class="pow-div">
+<label>Algorithm:
+<select class="pow-alg-select"></select>
+</label>
+<span class="message"></span>
+<div class="dummy-div">
+<label>Level:
+<input id="dummy-level"></input>
+</label>
+</div>
+<div class="hashcash-div">
+<label>Bits:
+<input class="hashcash-bits"></input>
+</label>
+<label>Salt chars:
+<input class="hashcash-saltchars"></input>
+</label>
+</div>
+</div>
+</div>
+
+<div>
+<label>When Mail Space Exhausted:
+<select id="when-mail-exhausted">
+<option></option>
+<option value="block">Block</option>
+<option value="free_oldest">Free Oldest</option>
+</select>
+</label>
+</div>
+
+<div>
+<label>Quota Size:
+<input id="quota-size"></input>
+</label>
+<label>Mail Quota Size:
+<input id="mail-quota-size"></input>
+</label>
+</div>
+
+<div>
+<label>User Class:
+<input id="user-class"></input>
+</label>
+<label>Auth Token:
+<input id="auth-token"></input>
+</label>
+</div>
+
+<button onclick="register();">Register</button>
+</div>
+</div>
+
+<div>
+<span id="register-message"></span>
+</div>
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+</html>

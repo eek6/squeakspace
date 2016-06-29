@@ -1,0 +1,558 @@
+<html>
+<head>
+<title>
+Manage Group
+</title>
+<style>
+.pow-div{display:none;}
+.dummy-div{display:none;}
+.hashcash-div{display:none;}
+</style>
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/cookielib-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/tablemanager-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/taskqueue-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/passphrasedialog.js"></script>
+<script type="text/javascript" src="/lib/accessselect.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+function status_say(mesg) {
+    $('#status-message').text(mesg);
+}
+
+function delete_say(mesg) {
+    $('#delete-message').text(mesg);
+}
+
+function change_group_quota_say(mesg) {
+    $('#change-group-quota-say').text(mesg);
+}
+
+function set_post_key_say(mesg) {
+    $('#set-post-key-div').find('.say').text(mesg);
+}
+
+function set_read_key_say(mesg) {
+    $('#set-read-key-div').find('.say').text(mesg);
+}
+
+function set_delete_key_say(mesg) {
+    $('#set-delete-key-div').find('.say').text(mesg);
+}
+
+pass_dialog = null;
+read_access_select = null;
+post_access_select = null;
+delete_access_select = null;
+
+params = querystring.load();
+
+
+function delete_group_button() {
+    $('#delete-group-div').show();
+}
+
+function cancel_delete() {
+    $('#delete-group-div').hide();
+}
+
+function delete_group() {
+
+    var node_name = params.node,
+        group_id = params.group,
+        public_key_hash = params.key,
+        passphrase = null;
+
+    squeakclient.proxy.delete_group(
+            {node_name: node_name,
+             group_id: group_id,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+
+                    resp = resp.resp;
+
+                    if (resp.status === 'ok') {
+                        delete_say('Group Deleted');
+                        $('#group-div').hide();
+
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, status_say);
+                    } else {
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, status_say, "node key", pass_dialog, delete_group);
+                } else {
+                }
+            });
+}
+
+
+function load_key_hashes() {
+
+    squeakclient.local.list_private_keys(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        post_list = $('#set-post-key-div').find('.key-list'),
+                        read_list = $('#set-read-key-div').find('.key-list'),
+                        delete_list = $('#set-delete-key-div').find('.key-list'),
+                        get = function(x) {
+                            return x;
+                        };
+
+                    refresh_select(post_list, keys, get);
+                    refresh_select(read_list, keys, get);
+                    refresh_select(delete_list, keys, get);
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, status_say);
+                } else {
+                }
+            });
+}
+
+function read_group() {
+
+    var node_name = params.node,
+        group_id = params.group,
+        public_key_hash = params.key,
+        passphrase = null;
+
+    squeakclient.proxy.read_group(
+            {node_name: node_name,
+             group_id: group_id,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function (resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+
+                    resp = resp.resp;
+
+                    if (resp.status === 'ok') {
+
+                        var group = resp.group;
+
+                        $('#read-access').text(group.read_access);
+                        $('#post-access').text(group.post_access);
+                        $('#delete-access').text(group.delete_access);
+                        $('#read-key-type').text(group.reading_key_type);
+                        $('#read-key').text(group.reading_pub_key);
+                        $('#post-key-type').text(group.posting_key_type);
+                        $('#post-key').text(group.posting_pub_key);
+                        $('#delete-key-type').text(group.delete_key_type);
+                        $('#delete-key').text(group.delete_pub_key);
+
+                        $('#group-quota').find('.quota-allocated').val(group.quota.quota_allocated);
+                        $('#group-quota').find('.quota-used').text(group.quota.quota_used);
+                        $('#group-quota').find('.when-space-exhausted').val(group.quota.when_space_exhausted);
+
+                        $('#last-post-time').text(group.last_post_time);
+
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, status_say);
+                    } else {
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, status_say, "node key", pass_dialog, read_group);
+                } else {
+                }
+            });
+}
+
+function change_group_quota() {
+
+    var node_name = params.node,
+        group_id = params.group,
+        new_size_text = $('#group-quota').find('.quota-allocated').val(),
+        new_size = parseInt(new_size_text),
+        when_space_exhausted = $('#group-quota').find('.when-space-exhausted').val(),
+        public_key_hash = params.key,
+        passphrase = null;
+
+    if (isNaN(new_size)) {
+        change_group_quota_say('Quota allocated must be an integer');
+    } else {
+        squeakclient.proxy.change_group_quota(
+                {node_name: node_name,
+                 group_id: group_id,
+                 new_size: new_size,
+                 when_space_exhausted: when_space_exhausted,
+                 public_key_hash: public_key_hash,
+                 passphrase: passphrase},
+                function (resp, textStatus) {
+                    debug(JSON.stringify(resp));
+    
+                    if (resp.status === 'ok') {
+    
+                        resp = resp.resp;
+    
+                        if (resp.status === 'ok') {
+                            change_group_quota_say('Group quota changed');
+    
+                            read_group();
+                        } else if (resp.status === 'error') {
+                            handle_error1(resp, change_group_quota_say);
+    
+                            read_group();
+                        } else {
+                        }
+    
+                    } else if (resp.status === 'error') {
+                        handle_error2(resp, change_group_quota_say, "node key", pass_dialog, change_group_quota);
+                    } else {
+                    }
+                });
+    }
+}
+
+function set_group_key(key_use, group_key_hash, say) {
+
+    var node_name = params.node,
+        group_id = params.group,
+        public_key_hash = params.key,
+        passphrase = null,
+        try_again = function() {
+            set_group_key(key_use, group_key_hash, say);
+        };
+
+    squeakclient.proxy.set_group_key(
+            {node_name: node_name,
+             group_id: group_id,
+             key_use: key_use,
+             group_key_hash: group_key_hash,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function (resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    resp = resp.resp;
+                    
+                    if (resp.status === 'ok') {
+                        say('Group key set');
+                        read_group();
+
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, say);
+
+                        read_group();
+                    } else {
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, say, "node key", pass_dialog, try_again);
+                } else {
+                }
+            });
+}
+
+function set_group_read_key() {
+    var group_key_hash = $('#set-read-key-div').find('.key-select').val();
+
+    set_group_key('read', group_key_hash, set_read_key_say);
+}
+
+function set_group_post_key() {
+    var group_key_hash = $('#set-post-key-div').find('.key-select').val();
+
+    set_group_key('post', group_key_hash, set_post_key_say);
+}
+
+function set_group_delete_key() {
+    var group_key_hash = $('#set-delete-key-div').find('.key-select').val();
+
+    set_group_key('delete', group_key_hash, set_delete_key_say);
+}
+
+function set_group_access(use, access_obj, say) {
+
+    var node_name = params.node,
+        group_id = params.group,
+        access = access_obj.value(),
+        public_key_hash = params.key,
+        passphrase = null,
+        try_again = function() {
+            set_group_access(use, access_obj);
+        };
+
+    if (access !== null) {
+        squeakclient.proxy.set_group_access(
+                {node_name: node_name,
+                 group_id: group_id,
+                 use: use,
+                 access: access,
+                 public_key_hash: public_key_hash,
+                 passphrase: passphrase},
+                function(resp, textStatus) {
+                    debug(JSON.stringify(resp));
+
+                    if (resp.status === 'ok') {
+                        resp = resp.resp;
+
+                        if (resp.status === 'ok') {
+                            say('Group access set');
+
+                            read_group();
+                        } else if (resp.status === 'error') {
+                            handle_error1(resp, say);
+
+                            read_group();
+                        } else {
+                        }
+                    } else if (resp.status === 'error') {
+                        handle_error2(resp, say, "node key", pass_dialog, try_again);
+                    } else {
+                    }
+                });
+    }
+}
+
+function set_read_access_say(mesg) {
+    $('#set-read-access-div').find('.say').text(mesg);
+}
+
+function set_post_access_say(mesg) {
+    $('#set-post-access-div').find('.say').text(mesg);
+}
+
+function set_delete_access_say(mesg) {
+    $('#set-delete-access-div').find('.say').text(mesg);
+}
+
+function set_read_access() {
+    set_group_access('read', read_access_select, set_read_access_say);
+}
+
+function set_post_access() {
+    set_group_access('post', post_access_select, set_post_access_say);
+}
+
+function set_delete_access() {
+    set_group_access('delete', delete_access_select, set_delete_access_say);
+}
+
+
+window.onload = function() {
+
+    pass_dialog = PassphraseDialog.defaultUi($('#passphrase-div'), handle_error1);
+    pass_dialog.initUi();
+
+    $('#node-name').text(params.node);
+    $('#group-id').text(params.group);
+
+    read_access_select = AccessSelect.defaultUI($('#set-read-access-div'));
+    read_access_select.initUI();
+
+    post_access_select = AccessSelect.defaultUI($('#set-post-access-div'));
+    post_access_select.initUI();
+
+    delete_access_select = AccessSelect.defaultUI($('#set-delete-access-div'));
+    delete_access_select.initUI();
+
+    read_group();
+    load_key_hashes();
+}
+
+</script>
+</head>
+<body>
+Manage Group
+<a href="home.html">Home</a>
+<a href="key-management.html">Key Management</a>
+
+
+<div id="passphrase-div" style="display:none;">
+<span>Enter passphrase for
+<span class="key-purpose"></span>
+key: <span class="public-key-hash"></span>
+</span>
+<div>
+<label>Passphrase: <input class="passphrase" type="password"></input></label>
+<label>Cache Minutes: <input class="cache-period"></input></label>
+<button class="enter">Enter</button>
+<span class="message"></span>
+</div>
+</div>
+
+
+
+<div id="group-div">
+<ul>
+<li> Node Name: <span id="node-name"></span>
+<li> Group ID: <span id="group-id"></span>
+
+<li> Read Access: <span id="read-access"></span>
+<div id="set-read-access-div">
+<label>Set Read Access:
+<select class="access-select"></select>
+</label>
+<div class="pow-div">
+<label>Algorithm:
+<select class="pow-alg-select"></select>
+</label>
+<span class="message"></span>
+<div class="dummy-div">
+<label>Level:
+<input class="dummy-level"></input>
+</label>
+</div>
+<div class="hashcash-div">
+<label>Bits:
+<input class="hashcash-bits"></input>
+</label>
+<label>Salt chars:
+<input class="hashcash-saltchars"></input>
+</label>
+</div>
+</div>
+<button onclick="set_read_access();">Set</button>
+<span class="say" onclick="$(this).text('');"></span>
+</div>
+
+<li> Post Access: <span id="post-access"></span>
+<div id="set-post-access-div">
+<label>Set Post Access:
+<select class="access-select"></select>
+</label>
+<div class="pow-div">
+<label>Algorithm:
+<select class="pow-alg-select"></select>
+</label>
+<span class="message"></span>
+<div class="dummy-div">
+<label>Level:
+<input class="dummy-level"></input>
+</label>
+</div>
+<div class="hashcash-div">
+<label>Bits:
+<input class="hashcash-bits"></input>
+</label>
+<label>Salt chars:
+<input class="hashcash-saltchars"></input>
+</label>
+</div>
+</div>
+<button onclick="set_post_access();">Set</button>
+<span class="say" onclick="$(this).text('');"></span>
+</div>
+
+
+<li> Delete Access: <span id="delete-access"></span>
+<div id="set-delete-access-div">
+<label>Set Delete Access:
+<select class="access-select"></select>
+</label>
+<div class="pow-div">
+<label>Algorithm:
+<select class="pow-alg-select"></select>
+</label>
+<span class="message"></span>
+<div class="dummy-div">
+<label>Level:
+<input class="dummy-level"></input>
+</label>
+</div>
+<div class="hashcash-div">
+<label>Bits:
+<input class="hashcash-bits"></input>
+</label>
+<label>Salt chars:
+<input class="hashcash-saltchars"></input>
+</label>
+</div>
+</div>
+<button onclick="set_delete_access();">Set</button>
+<span class="say" onclick="$(this).text('');"></span>
+</div>
+
+
+<li> Read Key Type: <span id="read-key-type"></span>
+<li> Read Public Key: <span id="read-key"></span>
+  <div id="set-read-key-div">
+  <label>Set Read Key:
+  <select class="key-select">
+  <option></option>
+  <optgroup class="key-list"></optgroup>
+  </select>
+  </label>
+  <button onclick="set_group_read_key();">Set</button>
+  <span class="say" onclick="$(this).text('');"></span>
+  </div>
+<li> Post Key Type: <span id="post-key-type"></span>
+<li> Post Public Key: <span id="post-key"></span>
+  <div id="set-post-key-div">
+  <label>Set Post Key:
+  <select class="key-select">
+  <option></option>
+  <optgroup class="key-list"></optgroup>
+  </select>
+  </label>
+  <button onclick="set_group_post_key();">Set</button>
+  <span class="say" onclick="$(this).text('');"></span>
+  </div>
+<li> Delete Key Type: <span id="delete-key-type"></span>
+<li> Delete Public Key: <span id="delete-key"></span>
+  <div id="set-delete-key-div">
+  <label>Set Delete Key:
+  <select class="key-select">
+  <option></option>
+  <optgroup class="key-list"></optgroup>
+  </select>
+  </label>
+  <button onclick="set_group_delete_key();">Set</button>
+  <span class="say" onclick="$(this).text('');"></span>
+  </div>
+<li> Quota:
+  <ul id="group-quota">
+  <li> Quota Allocated: <input class="quota-allocated"></input>
+  <li> Quota Used: <span class="quota-used"></span>
+  <li> When Space Exhausted:
+       <select class="when-space-exhausted">
+         <option value=""></option>
+         <option value="block">Block</option>
+         <option value="free_oldest">Free Oldest</option>
+       </select>
+       <button onclick="change_group_quota();">Set</button>
+       <span id="change-group-quota-say" onclick="change_group_quota_say('');"></span>
+  </ul>
+<li> Last Post Time: <span id="last-post-time"></span>
+</ul>
+
+<div>
+<button onclick="delete_group_button();">Delete Group</button>
+<span id="status-message"></span>
+</div>
+
+<div id="delete-group-div" style="display:none;">
+Are you sure you want to delete this group?
+<button onclick="delete_group();">Yes</button>
+<button onclick="cancel_delete();">No</button>
+</div>
+</div>
+
+<div>
+<span id="delete-message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

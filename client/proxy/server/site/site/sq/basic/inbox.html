@@ -1,0 +1,186 @@
+<html>
+<head>
+<title>
+Inbox
+</title>
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/tablemanager-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/taskqueue-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/passphrasedialog.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+pass_dialog = null;
+
+params = querystring.load();
+
+
+function load_message_list() {
+    var message_table = new TableManager($('#message-list')),
+        node_name = params.node,
+        start_time = params.start_time || null,
+        end_time = params.end_time || null,
+        max_records = params.max_records || null,
+        order = params.order || null,
+        public_key_hash = params.key,
+        passphrase = null;
+
+    squeakclient.proxy.read_message_list(
+            {node_name: node_name,
+             start_time: start_time,
+             end_time: end_time,
+             max_records: max_records,
+             order: order,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        var message_list = proxy_resp.message_list,
+                            length = message_list.length,
+                            i = 0;
+
+                        message_table.clear();
+
+                        for ( ; i < length; i++ ) {
+                            var message = message_list[i],
+                                message_params = {node: node_name,
+                                                  key: public_key_hash,
+                                                  id: message.message_id},
+                                message_url = 'message.html?' + $.param(message_params),
+                                link = $('<a>').attr('href', message_url)
+                                               .append(message.timestamp);
+
+                            message_table.addRow(
+                                    [link,
+                                     message.message_id,
+                                     message.to_user_key,
+                                     message.from_user,
+                                     message.from_user_key,
+                                     message.message_hash,
+                                     message.from_signature,
+                                     message.proof_of_work]);
+                        }
+
+                    } else if (proxy_resp.status === 'error') {
+                    } else {
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, null, 'mail access', pass_dialog, load_message_list);
+                } else {
+                }
+            });
+}
+
+
+function delete_message(row, node_name, message_id, public_key_hash, passphrase) {
+    var retry = function() {
+        return delete_message(row, node_name, message_id, public_key_hash, passphrase);
+    };
+
+    squeakclient.proxy.delete_message(
+            {node_name: node_name,
+             message_id: message_id,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    resp = resp.resp;
+
+                    if (resp.status === 'ok') {
+                        $(row).remove();
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, null);
+                    } else {
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, null, 'mail access', pass_dialog, retry);
+                } else {
+                }
+            });
+}
+
+function delete_messages() {
+    var message_table = new TableManager($('#message-list')),
+        node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null;
+
+    message_table.forCheckedRows(
+            function(row) {
+                var message_id = $($(row).children()[2]).text();
+
+                delete_message(row, node_name, message_id, public_key_hash, passphrase);
+            });
+}
+
+window.onload = function() {
+
+    pass_dialog = PassphraseDialog.defaultUi($('#passphrase-div'), handle_error1);
+    pass_dialog.initUi();
+
+    if (params !== null) {
+        $('#node-name').text(params.node);
+    }
+
+    load_message_list();
+}
+
+</script>
+</head>
+<body>
+Inbox
+<a href="home.html">Home</a>
+
+<div>
+<span id="node-name"></span>
+
+<div id="passphrase-div" style="display:none;">
+<span>Enter passphrase for
+<span class="key-purpose"></span>
+key: <span class="public-key-hash"></span>
+</span>
+<div>
+<label>Passphrase: <input class="passphrase" type="password"></input></label>
+<label>Cache Minutes: <input class="cache-period"></input></label>
+<button class="enter">Enter</button>
+<span class="message"></span>
+</div>
+</div>
+
+<table>
+<tbody>
+<tr>
+<td><button onclick="delete_messages();">Del</button>
+<td>Timestamp
+<td>Message Id
+<td>To Key
+<td>From User
+<td>From User Key
+<td>Message Hash
+<td>From Signature
+<td>Proof of Work
+</tr>
+</tbody>
+<tbody id="message-list">
+</tbody>
+</table>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

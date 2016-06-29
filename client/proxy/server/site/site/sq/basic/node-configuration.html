@@ -1,0 +1,130 @@
+
+<html>
+<head>
+<title>
+Node Configuration
+</title>
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/tablemanager-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+function node_addr_say(mesg) {
+    $('#node-addr-message').text(mesg);
+}
+
+function update_node_addrs() {
+    var table = new TableManager($('#node-addrs'));
+
+    squeakclient.local.list_node_addr(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var addrs = resp.addrs,
+                        length = addrs.length,
+                        i = 0;
+
+                    table.clear();
+
+                    for ( ; i < length; i++ ) {
+                        var addr = addrs[i];
+
+                        table.addRow([addr.node_name, addr.url, addr.real_node_name]);
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, node_addr_say);
+                } else {
+                }
+            });
+}
+
+function set_node_addr() {
+    var node_name = $('#node-name').val(),
+        url = $('#node-url').val(),
+        real_node_name = $('#real-node-name').val();
+
+    squeakclient.local.set_node_addr(
+            {node_name: node_name,
+             url: url,
+             real_node_name: real_node_name},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    update_node_addrs();
+                    node_addr_say('Node address added.');
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, node_addr_say);
+                } else {
+                }
+            });
+}
+
+function delete_node_addrs() {
+
+    var table = new TableManager($('#node-addrs'));
+
+    table.forCheckedRows(
+            function(row) {
+                var node_name = $($(row).children()[1]).text();
+
+                squeakclient.local.delete_node_addr(
+                    {node_name: node_name},
+                    function(resp, textStatus) {
+                        debug(JSON.stringify(resp));
+
+                        if (resp.status === 'ok') {
+                            $(row).remove();
+                            node_addr_say('Node address deleted.');
+                        } else if (resp.status === 'error') {
+                            handle_error1(resp, node_addr_say);
+                        } else {
+                        }
+                    });
+            });
+}
+
+window.onload = function() {
+    update_node_addrs();
+}
+
+</script>
+</head>
+<body>
+<span>Node Configuration</span>
+<a href="home.html">Home</a>
+
+<table>
+<tbody>
+<tr>
+<td><button onclick="delete_node_addrs();">Del</button>
+<td>Node Name
+<td>Node Address
+<td>Real Node Name
+<td> 
+</tr>
+</tbody>
+<tbody id="node-addrs">
+</tbody>
+<tbody>
+<tr>
+<td><button onclick="set_node_addr();">Add</button>
+<td><input id="node-name"></input>
+<td><input id="node-url"></input>
+<td><input id="real-node-name"></input>
+</tr>
+</tbody>
+</table>
+<span onclick="node_addr_say('');" id="node-addr-message"></span>
+
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+</body>
+</html>

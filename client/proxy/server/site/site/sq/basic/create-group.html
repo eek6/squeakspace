@@ -1,0 +1,445 @@
+<html>
+<head>
+<title>
+Create Group
+</title>
+<style>
+.pow-div{display:none;}
+.dummy-div{display:none;}
+.hashcash-div{display:none;}
+</style>
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/cookielib-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/tablemanager-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/taskqueue-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/asyncqueue-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/passphrasedialog.js"></script>
+<script type="text/javascript" src="/lib/accessselect.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+function status_say(mesg) {
+    $('#status-message').text(mesg);
+}
+
+pass_dialog = null;
+read_access_select = null;
+post_access_select = null;
+delete_access_select = null;
+
+params = querystring.load();
+
+
+function load_node_names() {
+    var node_list = $('#node-name-list');
+
+    squeakclient.local.list_node_addr(
+            {},
+            function (resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var node_addrs = resp.addrs,
+                        get = function(node_addr) {
+                                return node_addr.node_name;
+                            };
+
+                    refresh_select(node_list, node_addrs, get);
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, null);
+                } else {
+                }
+            });
+}
+
+function load_user_keys() {
+    var node_name = $('#node-name').val(),
+        private_key_lists = $('.user-key-list');
+
+    squeakclient.local.list_user_keys(
+            {node_name: node_name},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        get = function(key) {
+                            return key.public_key_hash;
+                        };
+
+                    private_key_lists.each(
+                        function() {
+                            refresh_select($(this), keys, get);
+                        });
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, null);
+                } else {
+                }
+            });
+}
+
+function load_private_keys() {
+    var private_key_lists = $('.private-key-list');
+
+    squeakclient.local.list_private_keys(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        get = function(key) {
+                            return key;
+                        };
+
+                    private_key_lists.each(
+                        function() {
+                            refresh_select($(this), keys, get);
+                        });
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, null);
+                } else {
+                }
+            });
+}
+
+
+
+function node_name_change() {
+    load_user_keys();
+}
+
+function set_local_group_key(group_id, user_id, node_name, key_use, key_hash, do_next) {
+
+    if (key_hash === '') {
+        squeakclient.local.delete_group_key(
+                {group_id: group_id,
+                 owner_id: user_id,
+                 node_name: node_name,
+                 key_use: key_use},
+                function(resp, textAccess) {
+                    debug(JSON.stringify(resp));
+    
+                    if (resp.status === 'ok') {
+                        do_next();
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, status_say);
+                    } else {
+                    }
+                });
+    } else {
+        squeakclient.local.assign_group_key(
+                {group_id: group_id,
+                 owner_id: user_id,
+                 node_name: node_name,
+                 key_use: key_use,
+                 public_key_hash: key_hash},
+                function(resp, textAccess) {
+                    debug(JSON.stringify(resp));
+    
+                    if (resp.status === 'ok') {
+                        do_next();
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, status_say);
+                    } else {
+                    }
+                });
+    }
+}
+
+function set_local_group_access(group_id, user_id, node_name, use, access, do_next) {
+
+    squeakclient.local.set_group_access(
+            {group_id: group_id,
+             owner_id: user_id,
+             node_name: node_name,
+             use: use,
+             access: access,
+             timestamp: null},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    do_next();
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, status_say);
+                } else {
+                }
+
+            });
+}
+
+
+function create_group() {
+    var cookies = cookielib.parse(),
+        user_id = cookies.user_id,
+        group_id = $('#group-name').val(),
+        node_name = $('#node-name').val(),
+        quota_allocated = $('#group-quota').val(),
+        when_space_exhausted = $('#when-space-exhausted').val(),
+        public_key_hash = $('#user-key').val(),
+        passphrase = null,
+
+        read_key = $('#read-key').val(),
+        post_key = $('#post-key').val(),
+        delete_key = $('#delete-key').val(),
+
+        read_access = read_access_select.value(),
+        post_access = post_access_select.value(),
+        delete_access = delete_access_select.value();
+
+    var create_group_ = function() {
+
+        squeakclient.proxy.create_group(
+                {node_name: node_name,
+                 group_id: group_id,
+                 quota_allocated: quota_allocated,
+                 when_space_exhausted: when_space_exhausted,
+                 public_key_hash: public_key_hash,
+                 passphrase: passphrase},
+                function(resp, textStatus) {
+                    debug(JSON.stringify(resp));
+
+                    if (resp.status === 'ok') {
+
+                        if (resp.resp.status === 'ok') {
+                            status_say('Group Created');
+                        } else if (resp.resp.status === 'error') {
+                            handle_error1(resp.resp, status_say);
+                        } else {
+                        }
+
+                    } else if (resp.status === 'error') {
+                        handle_error2(resp, status_say, 'user key', pass_dialog, create_group_);
+                    } else {
+                    }
+
+                });
+    };
+
+        set_local_group_access(group_id, user_id, node_name, 'read', read_access,
+    function() {
+        set_local_group_access(group_id, user_id, node_name, 'post', read_access,
+    function() {
+        set_local_group_access(group_id, user_id, node_name, 'delete', read_access,
+    function() {
+        set_local_group_key(group_id, user_id, node_name, 'read', read_key,
+    function() {
+        set_local_group_key(group_id, user_id, node_name, 'post', post_key,
+    function() {
+        set_local_group_key(group_id, user_id, node_name, 'delete', delete_key,
+    create_group_
+    );
+    });
+    });
+    });
+    });
+    });
+}
+
+window.onload = function() {
+
+    pass_dialog = PassphraseDialog.defaultUi($('#passphrase-div'), handle_error1);
+    pass_dialog.initUi();
+
+    read_access_select = AccessSelect.defaultUI($('#read-access-div'));
+    read_access_select.initUI();
+
+    post_access_select = AccessSelect.defaultUI($('#post-access-div'));
+    post_access_select.initUI();
+
+    delete_access_select = AccessSelect.defaultUI($('#delete-access-div'));
+    delete_access_select.initUI();
+
+    load_node_names();
+    load_private_keys();
+}
+
+</script>
+</head>
+<body>
+Create Group
+<a href="home.html">Home</a>
+<a href="key-management.html">Key Management</a>
+
+
+<div id="passphrase-div" style="display:none;">
+<span>Enter passphrase for
+<span class="key-purpose"></span>
+key: <span class="public-key-hash"></span>
+</span>
+<div>
+<label>Passphrase: <input class="passphrase" type="password"></input></label>
+<label>Cache Minutes: <input class="cache-period"></input></label>
+<button class="enter">Enter</button>
+<span class="message"></span>
+</div>
+</div>
+
+
+
+<div>
+
+<label>Node Name:
+<select id="node-name" onchange="node_name_change();">
+<option></option>
+<optgroup id="node-name-list"></optgroup>
+</select>
+</label>
+
+<label>User Key:
+<select id="user-key">
+<option></option>
+<optgroup class="user-key-list"></optgroup>
+</select>
+</label>
+
+</div>
+
+
+<div>
+
+<label>Group Name:
+<input id="group-name"></input>
+</label>
+</div>
+
+
+<div>
+<label>Group Quota:
+<input id="group-quota"></input>
+</label>
+</div>
+
+<div>
+<label>When Space Exhausted:
+<select id="when-space-exhausted">
+<option></option>
+<option value="block">Block</option>
+<option value="free_oldest">Free Oldest</option>
+</select>
+</label>
+
+</div>
+
+
+<div id="read-access-div">
+<label>Read Access:
+<select class="access-select"></select>
+</label>
+<div class="pow-div">
+<label>Algorithm:
+<select class="pow-alg-select"></select>
+</label>
+<span class="message"></span>
+<div class="dummy-div">
+<label>Level:
+<input id="dummy-level"></input>
+</label>
+</div>
+<div class="hashcash-div">
+<label>Bits:
+<input class="hashcash-bits"></input>
+</label>
+<label>Salt chars:
+<input class="hashcash-saltchars"></input>
+</label>
+</div>
+</div>
+</div>
+
+<div id="read-key-div">
+<label>Read Key:
+<select id="read-key">
+<option></option>
+<optgroup class="private-key-list"></optgroup>
+</select>
+</label>
+</div>
+
+<div id="post-access-div">
+<label>Post Access:
+<select class="access-select"></select>
+</label>
+<div class="pow-div">
+<label>Algorithm:
+<select class="pow-alg-select"></select>
+</label>
+<span class="message"></span>
+<div class="dummy-div">
+<label>Level:
+<input id="dummy-level"></input>
+</label>
+</div>
+<div class="hashcash-div">
+<label>Bits:
+<input class="hashcash-bits"></input>
+</label>
+<label>Salt chars:
+<input class="hashcash-saltchars"></input>
+</label>
+</div>
+</div>
+</div>
+
+<div id="post-key-div">
+<label>Post Key:
+<select id="post-key">
+<option></option>
+<optgroup class="private-key-list"></optgroup>
+</select>
+</label>
+</div>
+
+
+<div id="delete-access-div">
+<label>Delete Access:
+<select class="access-select"></select>
+</label>
+<div class="pow-div">
+<label>Algorithm:
+<select class="pow-alg-select"></select>
+</label>
+<span class="message"></span>
+<div class="dummy-div">
+<label>Level:
+<input id="dummy-level"></input>
+</label>
+</div>
+<div class="hashcash-div">
+<label>Bits:
+<input class="hashcash-bits"></input>
+</label>
+<label>Salt chars:
+<input class="hashcash-saltchars"></input>
+</label>
+</div>
+</div>
+</div>
+
+
+<div id="delete-key-div">
+<label>Delete Key:
+<select id="delete-key">
+<option></option>
+<optgroup class="private-key-list"></optgroup>
+</select>
+</label>
+</div>
+
+
+<div>
+<button onclick="create_group();">Create</button>
+<span id="status-message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

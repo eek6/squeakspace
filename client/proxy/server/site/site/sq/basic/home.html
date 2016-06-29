@@ -1,0 +1,389 @@
+<html>
+<head>
+<title>
+Home
+</title>
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+function say(mesg) {
+    $('#message').text(mesg);
+}
+
+function update_cookie() {
+    $('#cookie_message').text(document.cookie);
+}
+
+function toggle_next(elt) {
+    $(elt).next().toggle();
+}
+
+function handle_error_resp(resp) {
+    if (resp.reason === 'bad session id') {
+        window.location = 'login.html';
+        return true;
+    }
+
+    return false;
+}
+
+function ask_delete() {
+    $('#delete-confirm').show();
+}
+
+function cancel_delete() {
+    $('#delete-confirm').hide();
+}
+
+function delete_local_user() {
+    squeakclient.local.delete_user(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    alert('account deleted');
+                    window.location = 'login.html';
+                } else if (resp.status === 'error') {
+                    handle_error_resp(resp);
+                }
+            });
+}
+
+function sign_out_link() {
+    squeakclient.local.sign_out(
+            {},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    window.location = 'login.html';
+                } else if (resp.status === 'error') {
+                    handle_error_resp(resp);
+                }
+            });
+}
+
+function update_node_names() {
+
+    var node_name_lists = $('.node-list');
+
+    squeakclient.local.list_node_addr(
+            {},
+            function (resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var node_addrs = resp.addrs,
+                        get = function(node_addr) {
+                                return node_addr.node_name;
+                            };
+
+                    node_name_lists.each(
+                        function() {
+                            refresh_select($(this), node_addrs, get);
+                        });
+                } else if (resp.status === 'error') {
+                    handle_error_resp(resp);
+                } else {
+                }
+            });
+}
+
+function update_node_keys(node_name, key_list) {
+    if (node_name === '') {
+        key_list.children().remove();
+    } else {
+        squeakclient.local.list_user_keys(
+                {node_name: node_name},
+                function(resp, textStatus) {
+                    debug(JSON.stringify(resp));
+    
+                    if (resp.status === 'ok') {
+                        var keys = resp.keys,
+                            get = function(key) {
+                                return key.public_key_hash;
+                            };
+    
+                        refresh_select(key_list, keys, get);
+    
+                    } else if (resp.status === 'error') {
+                        handle_error_resp(resp);
+                    } else {
+                    }
+                });
+    }
+}
+
+function update_inbox_keys() {
+    var node_name = $('#inbox-node').val(),
+        key_list = $('#inbox-private-key-list');
+
+    update_node_keys(node_name, key_list);
+}
+
+function update_manage_group_keys() {
+    var div = $('#manage-group-div')
+        node_name = div.find('.group-node').val(),
+        key_list = div.find('.private-key-list');
+
+    update_node_keys(node_name, key_list);
+}
+
+
+
+function update_account_keys() {
+    var node_name = $('#account-node').val(),
+        key_list = $('#account-private-key-list');
+
+    update_node_keys(node_name, key_list);
+}
+
+function go_to_inbox() {
+    var node_name = $('#inbox-node').val(),
+        private_key = $('#inbox-private-key').val();
+        //passphrase = $('#inbox-passphrase').val();
+
+    if (node_name === '') {
+        say('Select a node.');
+    } else if (private_key === '') {
+        say('Select a key');
+    } else {
+        //cookielib.set('passphrase', passphrase);
+        var params = $.param(
+                {node: node_name,
+                 key: private_key});
+
+        window.location = 'inbox.html?' + params;
+    }
+}
+
+function go_to_account() {
+    var node_name = $('#account-node').val(),
+        private_key = $('#account-private-key').val();
+
+    if (node_name === '') {
+        say('Select a node.');
+    } else if (private_key === '') {
+        say('Select a key');
+    } else {
+        var params = $.param(
+                {node: node_name,
+                 key: private_key});
+
+        window.location = 'account.html?' + params;
+    }
+}
+
+function manage_group() {
+    var div = $('#manage-group-div'),
+        node_name = div.find('.group-node').val(),
+        key = div.find('.group-private-key').val(),
+        group_name = div.find('.group-name').val();
+
+    if (node_name === '') {
+        say('Select a node');
+    } else if (group_name === '') {
+        say('Group name required');
+    } else if (key === '') {
+        say('Private Key required');
+    } else {
+        var params = $.param(
+                {node: node_name,
+                 group: group_name,
+                 key: key});
+
+        window.location = 'manage-group.html?' + params;
+    }
+}
+
+
+function view_group() {
+    var div = $('#view-group-div'),
+        node_name = div.find('.group-node').val(),
+        owner_id = div.find('.group-owner').val(),
+        group_name = div.find('.group-name').val();
+
+    if (node_name === '') {
+        say('Select a node');
+    } else if (owner_id === '') {
+        say('Owner name required');
+    } else if (group_name === '') {
+        say('Group name required');
+    } else {
+        var params = $.param(
+                {node: node_name,
+                 owner: owner_id,
+                 group: group_name});
+
+        window.location = 'group.html?' + params;
+    }
+}
+
+
+window.onload = function() {
+
+    update_node_names();
+
+}
+
+</script>
+</head>
+<span>Home</span>
+<a onclick="sign_out_link();" href="#">Sign Out</a>
+<a onclick="ask_delete();" href="#">Delete Account</a>
+<a href="key-management.html">Key Management</a>
+<a href="node-configuration.html">Node Configuration</a>
+<a href="crypt.html">Crypt</a>
+<div id="delete-confirm" style="display:none;">
+<span>
+Warning: delete your node accounts before deleting
+your local account. <br/><br/>
+When your local account is deleted,
+your keys will be erased and you will not be able
+to delete your node accounts without them. <br/><br/>
+Are you sure you want to delete your local account?
+</span>
+<button onclick="delete_local_user();">Yes</button>
+<button onclick="cancel_delete();">No</button>
+</div>
+<div id="inbox-div">
+<a onclick="toggle_next(this);" href="#inbox-div">Inbox</a>
+<div style="display:none;">
+
+
+
+<label>Node:
+<select id="inbox-node" onchange="update_inbox_keys();">
+<option></option>
+<optgroup class="node-list">
+</optgroup>
+</select>
+</label>
+
+<label>Private Key:
+<select id="inbox-private-key">
+<option></option>
+<optgroup id="inbox-private-key-list">
+</optgroup>
+</select>
+</label>
+
+<button onclick="go_to_inbox();">Go</button>
+</div>
+</div>
+
+<div id="compose-div">
+<a href="compose.html">Compose</a>
+</div>
+
+<div>
+<a href="create-group.html">Create Group</a>
+</div>
+
+
+<div id="manage-group-div">
+<a onclick="toggle_next(this);" href="#manage-group-div">Manage Group</a>
+<div style="display:none;">
+
+<label>Node:
+<select class="group-node" onchange="update_manage_group_keys();">
+<option></option>
+<optgroup class="node-list">
+</optgroup>
+</select>
+</label>
+
+<label>Private Key:
+<select class="group-private-key">
+<option></option>
+<optgroup class="private-key-list">
+</optgroup>
+</select>
+</label>
+
+<label>Group Name:
+<input class="group-name"></input>
+</label>
+
+<button onclick="manage_group();">Go</button>
+</div>
+</div>
+
+
+
+
+<div id="view-group-div">
+<a onclick="toggle_next(this);" href="#view-group-div">View Group</a>
+<div style="display:none;">
+
+<label>Node:
+<select class="group-node">
+<option></option>
+<optgroup class="node-list">
+</optgroup>
+</select>
+</label>
+
+<label>Owner ID:
+<input class="group-owner"></input>
+<label>
+
+<label>Group Name:
+<input class="group-name"></input>
+</label>
+
+<button onclick="view_group();">Go</button>
+</div>
+</div>
+
+<div id="register-div">
+<a href="register.html">Node Register</a>
+</div>
+
+<div id="account-div">
+<a onclick="toggle_next(this);" href="#account-div">Node Account</a>
+<div style="display:none;">
+
+<label>Node:
+<select id="account-node" onchange="update_account_keys();">
+<option></option>
+<optgroup class="node-list">
+</optgroup>
+</select>
+</label>
+
+<label>Private Key:
+<select id="account-private-key">
+<option></option>
+<optgroup id="account-private-key-list">
+</optgroup>
+</select>
+</label>
+
+<button onclick="go_to_account();">Go</button>
+</div>
+</div>
+
+
+
+<div>
+<span id="message"></span>
+</div>
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+<div onclick="update_cookie();">
+<span>Cookie:</span>
+<span id="cookie_message"></span>
+</div>
+
+<div id="obj-div">
+<span class="message"></span>
+</div>
+
+</html>

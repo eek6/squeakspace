@@ -1,0 +1,102 @@
+<html>
+<head>
+<title>
+Login
+</title>
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+function say(mesg) {
+    $('#message').text(mesg);
+}
+
+function update_cookie() {
+    $('#cookie_message').text(document.cookie);
+}
+
+function login_button() {
+    var user_id = $('#user_id_input').val(),
+        password = $('#password_input').val();
+    squeakclient.local.login(
+            {user_id: user_id,
+             password: password},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var session = resp.session,
+                        session_id = session.session_id;
+                    window.location = 'home.html';
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'bad password') {
+                        say('Incorrect password');
+                        $('#password_input').val('');
+                    } else if (resp.reason === 'field required') {
+                        say('Field required: ' + resp.field);
+                    } else {
+                        say(resp.reason);
+                    }
+                } else {
+                }
+            });
+};
+
+function register_button() {
+    var user_id = $('#user_id_input').val(),
+        password = $('#password_input').val();
+
+    squeakclient.local.create_user(
+            {user_id: user_id,
+             password: password},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var session = resp.session,
+                        session_id = session.session_id;
+                    window.location = 'home.html';
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'field required') {
+                        say('Field required: ' + resp.field);
+                    } else if (resp.reason === 'local user exists') {
+                        say('User ' + user_id + ' already exists');
+                    }
+                } else {
+                }
+            });
+};
+
+</script>
+</head>
+<body>
+
+<div>
+<span>
+Username:
+<input id="user_id_input" name="user_id"></input>
+</span>
+</div>
+<div>
+<span>
+Password:
+<input id="password_input" type="password" name="password"></input>
+</span>
+</div>
+<button onclick="login_button();">login</button>
+<button onclick="register_button();">register</button>
+<div>
+<span id="message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+<div onclick="update_cookie();">
+<span>Cookie:</span>
+<span id="cookie_message"></span>
+</div>
+</body>
+</html>

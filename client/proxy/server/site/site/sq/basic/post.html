@@ -1,0 +1,222 @@
+<html>
+<head>
+<title>
+Post
+</title>
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/tablemanager-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/taskqueue-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/passphrasedialog.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+function status_say(mesg) {
+    $('#status-message').text(mesg);
+}
+
+pass_dialog = null;
+post_table = null;
+
+params = querystring.load();
+
+
+function view_group() {
+    var node_name = params.node,
+        owner_id = params.owner,
+        group_id = params.group,
+        group_params = {
+            node: node_name,
+            group: group_id,
+            owner: owner_id},
+        url = 'group.html?' + $.param(group_params);
+
+    window.location = url;
+}
+
+
+function read_access_step(group_id, owner_id, node_name, use, on_ok) {
+
+    var try_again = function() {
+            read_access_step(group_id, owner_id, node_name, use, on_ok);
+        };
+
+    squeakclient.proxy.read_group_access(
+            {group_id: group_id,
+             owner_id: owner_id,
+             node_name: node_name,
+             use: use},
+            function(resp, textStatus) {
+                 debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    resp = resp.resp;
+
+                    if (resp.status === 'ok') {
+                        on_ok();
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, status_say);
+                    } else {
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, status_say, use, pass_dialog, try_again);
+                } else {
+                }
+            });
+}
+
+function delete_post() {
+
+    var node_name = params.node,
+        group_id = params.group,
+        owner_id = params.owner,
+        post_id = params.id,
+        passphrase = null,
+        on_ok = function() {
+            squeakclient.proxy.delete_post(
+                    {node_name: node_name,
+                     group_id: group_id,
+                     owner_id: owner_id,
+                     post_id: post_id,
+                     passphrase: passphrase},
+                    function(resp, textStatus) {
+                        debug(JSON.stringify(resp));
+        
+                        if (resp.status === 'ok') {
+                            resp = resp.resp;
+        
+                            if (resp.status === 'ok') {
+                                status_say('Post deleted');
+                            } else if (resp.status === 'error') {
+                                handle_error1(resp, status_say);
+                            } else {
+                            }
+        
+                        } else if (resp.status === 'error') {
+                            handle_error2(resp, status_say, 'delete', pass_dialog, delete_post);
+                        } else {
+                        }
+                    });
+        };
+
+    read_access_step(group_id, owner_id, node_name, 'delete', on_ok);
+}
+
+
+function load_post() {
+
+    var node_name = params.node,
+        group_id = params.group,
+        owner_id = params.owner,
+        post_id = params.id,
+        passphrase = null,
+        on_ok = function() {
+            squeakclient.proxy.read_post(
+                    {node_name: node_name,
+                     group_id: group_id,
+                     owner_id: owner_id,
+                     post_id: post_id,
+                     passphrase: passphrase},
+                    function(resp, textStatus) {
+                        debug(JSON.stringify(resp));
+        
+                        if (resp.status === 'ok') {
+                            resp = resp.resp;
+        
+                            if (resp.status === 'ok') {
+        
+                                var post = resp.post;
+        
+                                $('#post-id').text(post.post_id);
+                                $('#timestamp').text(post.timestamp);
+                                $('#group-id').text(post.group_id);
+                                $('#owner-id').text(post.owner_id);
+                                $('#data').val(post.data);
+                                $('#data-hash').text(post.data_hash);
+                                $('#post-signature').text(post.post_signature);
+                                $('#proof-of-work').text(post.proof_of_work);
+        
+                            } else if (resp.status === 'error') {
+                                handle_error1(resp, status_say);
+                            } else {
+                            }
+        
+                        } else if (resp.status === 'error') {
+                            handle_error2(resp, status_say, 'reading', pass_dialog, load_post);
+                        } else {
+                        }
+                    });
+        };
+
+    read_access_step(group_id, owner_id, node_name, 'read', on_ok);
+}
+
+window.onload = function() {
+
+    pass_dialog = PassphraseDialog.defaultUi($('#passphrase-div'), handle_error1);
+    pass_dialog.initUi();
+
+    if (params !== null) {
+        $('#node-name').text(params.node);
+        $('#group-id').text(params.group);
+        $('#owner-id').text(params.owner);
+        $('#post-id').text(params.id);
+    }
+
+    load_post();
+}
+
+
+</script>
+</head>
+<body>
+Post
+<a href="home.html">Home</a>
+<a href="#" onclick="view_group();">Group</a>
+
+
+
+<div>
+
+<div id="passphrase-div" style="display:none;">
+<span>Enter passphrase for
+<span class="key-purpose"></span>
+key: <span class="public-key-hash"></span>
+</span>
+<div>
+<label>Passphrase: <input class="passphrase" type="password"></input></label>
+<label>Cache Minutes: <input class="cache-period"></input></label>
+<button class="enter">Enter</button>
+<span class="message"></span>
+</div>
+</div>
+
+
+<div>
+<button onclick="delete_post();">Delete</button>
+<span id="status-message"></span>
+<ul>
+<li>Node: <span id="node-name"></span>
+<li>Owner Id: <span id="owner-id"></span>
+<li>Group Id: <span id="group-id"></span>
+<li>Timestamp: <span id="timestamp"></span>
+<li>Post Id: <span id="post-id"></span>
+<li>Data: <textarea id="data" readonly="true"></textarea>
+<li>Data Hash: <span id="data-hash"></span>
+<li>Post Signature: <span id="post-signature"></span>
+<li>Proof of Work: <span id="proof-of-work"></span>
+</ul>
+</div>
+
+
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

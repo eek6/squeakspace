@@ -1,0 +1,420 @@
+<html>
+<head>
+<title>
+Compose
+</title>
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/taskqueue-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/passphrasedialog.js"></script>
+<script type="text/javascript" src="/site/sq/basic/site-util.js"></script>
+<script type="text/javascript">
+
+pass_dialog = null;
+
+params = querystring.load();
+
+
+function message_say(mesg) {
+    $('#message-say').text(mesg);
+}
+
+function update_node_names() {
+
+    var node_name_list = $('#node-name-list');
+
+    squeakclient.local.list_node_addr(
+            {},
+            function (resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var node_addrs = resp.addrs,
+                        get = function(node_addr) {
+                                return node_addr.node_name;
+                            };
+
+                    refresh_select(node_name_list, node_addrs, get);
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, null);
+                } else {
+                }
+            });
+}
+
+function update_to_users() {
+    var node_name = $('#node-name').val(),
+        to_user_list = $('#to-user-list');
+
+    squeakclient.local.list_other_user_keys(
+            {node_name: node_name},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0,
+                        user_set = {};
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i];
+
+                        user_set[key.user_id] = true;
+                    }
+
+                    var user_names = Object.keys(user_set);
+
+                    refresh_select(to_user_list, user_names);
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, null);
+                } else {
+                }
+            });
+
+}
+
+function update_to_user_keys() {
+    var node_name = $('#node-name').val(),
+        to_user = $('#to-user').val(),
+        to_user_key_list = $('#to-user-key-list');
+
+    squeakclient.local.list_other_user_keys(
+            {node_name: node_name,
+             other_user_id: to_user},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        get = function(key) {
+                            return key.public_key_hash;
+                        };
+
+                    refresh_select(to_user_key_list, keys, get);
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, null);
+                } else {
+                }
+            });
+}
+
+function update_private_keys() {
+    var node_name = $('#node-name').val(),
+        from_key_list = $('#from-key-list');
+
+    squeakclient.local.list_user_keys(
+            {node_name: node_name},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        get = function(key) {
+                            return key.public_key_hash;
+                        };
+
+                    refresh_select(from_key_list, keys, get);
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, null);
+                } else {
+                }
+            });
+}
+
+function node_name_changed() {
+    update_private_keys();
+    update_to_users();
+    update_to_user_keys();
+    $('#will-send-node').text($('#node-name').val());
+    $('#confirm-div').hide();
+}
+
+function to_user_changed() {
+    update_to_user_keys();
+    $('#will-send-user').text($('#to-user').val());
+    $('#confirm-div').hide();
+}
+
+function encrypt_message(cipher_callback, say) {
+    var public_key_hash = $('#to-user-key').val(),
+        plaintext = $('#message').val();
+
+    squeakclient.local.crypt.encrypt(
+            {public_key_hash: public_key_hash,
+             plaintext: plaintext},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    cipher_callback(resp.ciphertext, say);
+                } else if (resp.status === 'error') {
+                    handle_error1(resp, say);
+                } else {
+                }
+            });
+}
+
+function update_encrypted() {
+    var to_user_key = $('#to-user-key').val(),
+        will_encrypt = (to_user_key === '' ? 'unencrypted' : 'encrypted');
+
+    $('#will-encrypt').text(will_encrypt);
+    $('#confirm-div').hide();
+}
+
+function update_signed() {
+    var from_key = $('#from-key').val(),
+        will_sign = (from_key === '' ? 'unsigned' : 'signed');
+
+    $('#will-sign').text(will_sign);
+    $('#confirm-div').hide();
+}
+
+function send_button() {
+    update_encrypted();
+    update_signed();
+    $('#confirm-div').show();
+}
+
+function discard_button() {
+    window.location = 'home.html';
+}
+
+function show_sent_details(resp) {
+    $('#sent-message-id').text(resp.message_id);
+    $('#sent-timestamp').text(resp.timestamp);
+    $('#sent-message-hash').text(resp.message_hash);
+    $('#sent-from-signature').text(resp.from_signature);
+    $('#sent-proof-of-work').text(resp.proof_of_work);
+    $('#sent-details-div').show();
+}
+
+
+// This is how to do encryption from the app.
+/*
+function do_send(node_name, to_user, to_user_key, from_key, message, passphrase) {
+    var cryptor = null;
+
+    if (to_user_key === '') {
+        cryptor = function(fn, say) {
+            return fn(message, say); // give plaintext.
+        };
+    } else {
+        cryptor = encrypt_message;
+    }
+
+    cryptor(function(public_message, say) {
+                squeakclient.proxy.send_message(
+                    {node_name: node_name,
+                     to_user: to_user,
+                     to_user_key_hash: to_user_key,
+                     from_user_key_hash: from_key,
+                     message: public_message,
+                     passphrase: passphrase},
+                    function(resp, textStatus) {
+                        debug(JSON.stringify(resp));
+
+                        $('#confirm-div').hide();
+
+                        if (resp.status === 'ok') {
+                            var proxy_resp = resp.resp;
+
+                            if (proxy_resp.status === 'ok') {
+                                say('Message Sent.');
+                                show_sent_details(resp);
+                            } else if (proxy_resp.status === 'error') {
+                                handle_error1(proxy_resp, say);
+                            } else {
+                            }
+
+                        } else if (resp.status === 'error') {
+                            handle_error2(resp, say, "signing key", pass_dialog, send_button);
+                        } else {
+                        }
+
+                    });
+            }, message_say);
+}
+*/
+
+// encryption is now automatically done in the local proxy.
+function do_send(node_name, to_user, to_user_key, from_key, message, passphrase, force_encryption) {
+
+    squeakclient.proxy.send_message(
+            {node_name: node_name,
+             to_user: to_user,
+             to_user_key_hash: to_user_key,
+             from_user_key_hash: from_key,
+             message: message,
+             passphrase: passphrase,
+             force_encryption: force_encryption},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        message_say('Message Sent.');
+                        show_sent_details(resp);
+                    } else if (proxy_resp.status === 'error') {
+                        handle_error1(proxy_resp, message_say);
+                    } else {
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, message_say, "signing key", pass_dialog, send_button);
+                } else {
+                }
+            });
+}
+
+function query_step(node_name, to_user, to_user_key, from_key, message, passphrase, force_encryption) {
+    var retry = function() {
+        return query_step(node_name, to_user, to_user_key, from_key, message, passphrase);
+    };
+
+    squeakclient.proxy.query_message_access(
+            {node_name: node_name,
+             to_user: to_user,
+             from_user_key_hash: from_key,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    do_send(node_name, to_user, to_user_key, from_key, message, passphrase, force_encryption);
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, null, "signing key", pass_dialog, retry);
+                } else {
+                }
+            });
+}
+
+function confirm_button() {
+    var node_name = $('#node-name').val(),
+        to_user = $('#to-user').val(),
+        to_user_key = $('#to-user-key').val(),
+        from_key = $('#from-key').val(),
+        message = $('#message').val(),
+        passphrase = null,
+        force_encryption = $('#force-encryption').prop('checked');
+
+    $('#confirm-div').hide();
+    query_step(node_name, to_user, to_user_key, from_key, message, passphrase, force_encryption);
+}
+
+
+
+function cancel_button() {
+    $('#confirm-div').hide();
+}
+
+window.onload = function() {
+
+    pass_dialog = PassphraseDialog.defaultUi($('#passphrase-div'), handle_error1);
+    pass_dialog.initUi();
+
+    update_node_names();
+}
+
+</script>
+</head>
+<body>
+Compose
+<a href="home.html">Home</a>
+
+<div id="passphrase-div" style="display:none;">
+<span>Enter passphrase for
+<span class="key-purpose"></span>
+key: <span class="public-key-hash"></span>
+</span>
+<div>
+<label>Passphrase: <input class="passphrase" type="password"></input></label>
+<label>Cache Minutes: <input class="cache-period"></input></label>
+<button class="enter">Enter</button>
+<span class="message"></span>
+</div>
+</div>
+
+<div>
+<label>To Node:
+<select id="node-name" onchange="node_name_changed();">
+<option></option>
+<optgroup id="node-name-list"></optgroup>
+</select>
+</label>
+</div>
+
+<div>
+<label>To User:
+<select id="to-user" onchange="to_user_changed();">
+<option></option>
+<optgroup id="to-user-list"></optgroup>
+</select>
+</label>
+</div>
+
+<div>
+<label>To User Key:
+<select id="to-user-key" onchange="update_encrypted();">
+<option></option>
+<optgroup id="to-user-key-list"></optgroup>
+</select>
+
+<label> Force Encryption:
+<input id="force-encryption" type="checkbox" checked="true"></input>
+</label>
+</label>
+
+<div>
+<label>From Key:
+<select id="from-key" onchange="update_signed();">
+<option></option>
+<optgroup id="from-key-list">
+</optgroup>
+</select>
+</label>
+</div>
+
+
+<div>
+<label>
+Message:
+<textarea id="message" rows="20" style="width:400pt"></textarea>
+</label>
+</div>
+
+<div>
+<button onclick="send_button();">Send</button>
+<button onclick="discard_button();">Discard</button>
+<span id="message-say" onclick="message_say('');"></span>
+</div>
+
+<div style="display:none;" id="confirm-div">
+Confirm: sending <b id="will-encrypt"></b> and <b id="will-sign"></b> message
+to <span id="will-send-user"></span> at <span id="will-send-node"></span>
+<button onclick="confirm_button();">Confirm</button>
+<button onclick="cancel_button();">Cancel</button>
+</div>
+
+<div style="display:none;" id="sent-details-div">
+Sent Message Details:
+<ul>
+<li>Message Id: <span id="sent-message-id"></span>
+<li>Timestamp: <span id="sent-timestamp"></span>
+<li>Message Hash: <span id="sent-message-hash"></span>
+<li>From Signature: <span id="sent-from-signature"></span>
+<li>Proof of Work: <span id="sent-proof-of-work"></span>
+</ul>
+</div>
+
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>
