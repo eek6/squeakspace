@@ -44,6 +44,7 @@ Alf = tp.User(
         when_mail_exhausted='block',
         quota_size=user_quota,
         mail_quota_size=mail_quota,
+        max_message_size=None,
         user_class=None,
         auth_token=None)
 
@@ -101,6 +102,7 @@ resp = client.create_group(
           delete_pub_key = delete_key,
           quota_allocated=200*1024*1024, # too big
           when_space_exhausted='block',
+          max_post_size=None,
           auth_key=Alf.key)
 assert(resp['status'] == 'error')
 client.assert_integrity(True)
@@ -118,6 +120,7 @@ resp = client.create_group(
           delete_pub_key=delete_key,
           quota_allocated=group_quota,
           when_space_exhausted='block',
+          max_post_size=None,
           auth_key=Alf.key)
 assert(resp['status'] == 'ok')
 client.assert_integrity(True)
@@ -166,6 +169,60 @@ client.assert_integrity(True)
 (resp, gen) = client.make_post('group1', Alf.user_id, post1, post_key, None)
 assert(resp['status'] == 'error')
 client.assert_integrity(True)
+
+
+resp = client.change_group_access('group1', Alf.user_id, 'post', 'block', Alf.key)
+assert(resp['status'] == 'ok')
+client.assert_integrity(True)
+
+
+(resp, gen) = client.make_post('group1', Alf.user_id, post1, post_key, proof_of_work_args)
+assert(resp['status'] == 'error')
+assert(resp['reason'] == 'blocked')
+(post1_id, post1_timestamp, _, _, _) = gen
+client.assert_integrity(True)
+
+
+resp = client.read_max_post_size('group1', Alf.user_id, post_key)
+assert(resp['status'] == 'error')
+assert(resp['reason'] == 'blocked')
+client.assert_integrity(True)
+
+
+resp = client.change_group_access('group1', Alf.user_id, 'post', 'allow', Alf.key)
+assert(resp['status'] == 'ok')
+client.assert_integrity(True)
+
+
+resp = client.read_max_post_size('group1', Alf.user_id, None)
+assert(resp['status'] == 'error')
+client.assert_integrity(True)
+
+resp = client.read_max_post_size('group1', Alf.user_id, post_key)
+assert(resp['status'] == 'ok')
+assert(resp['max_post_size'] == None)
+client.assert_integrity(True)
+
+resp = client.change_max_post_size('group1', Alf.user_id, 1, Alf.key)
+assert(resp['status'] == 'ok')
+client.assert_integrity(True)
+
+resp = client.read_max_post_size('group1', Alf.user_id, post_key)
+assert(resp['status'] == 'ok')
+assert(resp['max_post_size'] == 1)
+client.assert_integrity(True)
+
+
+(resp, gen) = client.make_post('group1', Alf.user_id, post1, post_key, proof_of_work_args)
+assert(resp['status'] == 'error')
+assert(resp['reason'] == 'post too large')
+(post1_id, post1_timestamp, _, _, _) = gen
+client.assert_integrity(True)
+
+resp = client.change_max_post_size('group1', Alf.user_id, 1000000, Alf.key)
+assert(resp['status'] == 'ok')
+client.assert_integrity(True)
+
 
 (resp, gen) = client.make_post('group1', Alf.user_id, post1, post_key, proof_of_work_args)
 assert(resp['status'] == 'ok')

@@ -123,6 +123,7 @@ class ClientRaw:
             reading_key_type, reading_pub_key,
             delete_key_type, delete_pub_key,
             quota_allocated, when_space_exhausted,
+            max_post_size,
             public_key_hash, signature):
     
         method = 'POST'
@@ -143,6 +144,7 @@ class ClientRaw:
                  'delete_pub_key' : delete_pub_key,
                  'quota_allocated' : quota_allocated,
                  'when_space_exhausted' : when_space_exhausted,
+                 'max_post_size' : max_post_size,
                  'public_key_hash' : public_key_hash,
                  'signature' : signature})
     
@@ -258,7 +260,70 @@ class ClientRaw:
                  'from_user_key_sig' : from_user_key_sig})
     
         return self.send_and_getter.send_and_get(self.conn, method, url)
+
+    #max-message-size
+
+    def read_max_message_size(self, timestamp, node_name, to_user, from_user, from_user_key_hash, from_user_key_sig):
     
+        method = 'GET'
+        url = '/max-message-size?' + uc.encode(
+                {'timestamp' : timestamp,
+                 'node_name' : node_name,
+                 'to_user' : to_user,
+                 'from_user' : from_user,
+                 'from_user_key_hash' : from_user_key_hash,
+                 'from_user_key_sig' : from_user_key_sig})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, url)
+
+    def change_max_message_size(self,
+            timestamp, node_name, user_id, new_size,
+            public_key_hash, signature):
+    
+        method = 'POST'
+        url = '/max-message-size'
+        body = uc.encode(
+                {'timestamp' : timestamp,
+                 'node_name' : node_name,
+                 'user_id' : user_id,
+                 'new_size' : new_size,
+                 'public_key_hash' : public_key_hash,
+                 'signature' : signature})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, url, body)
+ 
+
+    #max-post-size
+
+    def read_max_post_size(self, timestamp, node_name, group_id, owner_id, post_signature):
+        method = 'GET'
+        url = '/max-post-size?' + uc.encode(
+                {'timestamp' : timestamp,
+                 'node_name' : node_name,
+                 'group_id' : group_id,
+                 'owner_id' : owner_id,
+                 'post_signature' : post_signature})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, url)
+
+
+    def change_max_post_size(self,
+            timestamp, node_name, group_id, owner_id, new_size,
+            public_key_hash, signature):
+    
+        method = 'POST'
+        url = '/max-post-size'
+        body = uc.encode(
+                {'timestamp' : timestamp,
+                 'node_name' : node_name,
+                 'group_id' : group_id,
+                 'owner_id' : owner_id,
+                 'new_size' : new_size,
+                 'public_key_hash' : public_key_hash,
+                 'signature' : signature})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, url, body)
+ 
     
     #message-access
     
@@ -315,6 +380,7 @@ class ClientRaw:
     
     
     def read_message_list(self, timestamp, node_name, user_id,
+                          to_user_key, from_user, from_user_key,
                           start_time, end_time, max_records, order,
                           public_key_hash, signature):
     
@@ -323,6 +389,9 @@ class ClientRaw:
                 {'timestamp' : timestamp,
                  'node_name' : node_name,
                  'user_id' : user_id,
+                 'to_user_key' : to_user_key,
+                 'from_user' : from_user,
+                 'from_user_key' : from_user_key,
                  'start_time' : start_time,
                  'end_time' : end_time,
                  'max_records' : max_records,
@@ -504,6 +573,17 @@ class ClientRaw:
         return self.send_and_getter.send_and_get(self.conn, method, url, body)
     
     
+    #query-user
+
+    def query_user(self, node_name, user_id):
+
+        method = 'GET'
+        url = '/query-user?' + uc.encode(
+                {'node_name' : node_name,
+                 'user_id' : user_id})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, url)
+
     
     #user
     
@@ -511,6 +591,7 @@ class ClientRaw:
                     key_type, public_key, public_key_hash, revoke_date,
                     default_message_access, when_mail_exhausted,
                     quota_size, mail_quota_size,
+                    max_message_size,
                     user_class, auth_token):
     
         method = 'POST'
@@ -526,6 +607,7 @@ class ClientRaw:
                  'when_mail_exhausted' : when_mail_exhausted,
                  'quota_size' : quota_size,
                  'mail_quota_size' : mail_quota_size,
+                 'max_message_size' : max_message_size,
                  'user_class' : user_class,
                  'auth_token' : auth_token})
     
@@ -593,6 +675,16 @@ class ClientRaw:
         return self.send_and_getter.send_and_get(self.conn, method, url)
     
     
+    def read_quota_available(self, node_name, user_class):
+    
+        method = 'GET'
+        url = '/quota-available?' + uc.encode(
+                {'node_name' : node_name,
+                 'user_class' : user_class})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, url)
+ 
+
     def read_version(self, node_name):
     
         method = 'GET'

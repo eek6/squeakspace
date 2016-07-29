@@ -14,6 +14,9 @@ def get_handler(environ):
     session_id = ht.get_required_cookie(cookies, 'session_id')
 
     node_name = ht.get_required(query, 'node_name')
+    to_user_key = ht.get_optional(query, 'to_user_key')
+    from_user = ht.get_optional(query, 'from_user')
+    from_user_key = ht.get_optional(query, 'from_user_key')
     start_time = ht.convert_int(ht.get_optional(query, 'start_time'), 'start_time')
     end_time = ht.convert_int(ht.get_optional(query, 'end_time'), 'end_time')
     max_records = ht.convert_int(ht.get_optional(query, 'max_records'), 'max_records')
@@ -25,7 +28,8 @@ def get_handler(environ):
     try:
         c = db.cursor(conn)
         resp = db.read_message_list(c, user_id, session_id,
-                                    node_name, start_time, end_time, max_records, order,
+                                    node_name, to_user_key, from_user, from_user_key,
+                                    start_time, end_time, max_records, order,
                                     public_key_hash, passphrase)
 
         raise ht.ok_json({'status' : 'ok', 'resp' : resp})

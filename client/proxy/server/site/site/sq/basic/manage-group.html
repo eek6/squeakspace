@@ -1,5 +1,7 @@
+<!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
 <title>
 Manage Group
 </title>
@@ -159,6 +161,7 @@ function read_group() {
                         $('#group-quota').find('.quota-used').text(group.quota.quota_used);
                         $('#group-quota').find('.when-space-exhausted').val(group.quota.when_space_exhausted);
 
+                        $('#max-post-size').val(group.max_post_size);
                         $('#last-post-time').text(group.last_post_time);
 
                     } else if (resp.status === 'error') {
@@ -345,6 +348,42 @@ function set_delete_access() {
     set_group_access('delete', delete_access_select, set_delete_access_say);
 }
 
+function set_max_post_size_say(mesg) {
+    $('#set-max-post-size-message').text(mesg);
+}
+
+function set_max_post_size() {
+
+    var node_name = params.node,
+        group_id = params.group,
+        new_size = $('#max-post-size').val(),
+        public_key_hash = params.key,
+        passphrase = null;
+
+    squeakclient.proxy.change_max_post_size(
+                {node_name: node_name,
+                 group_id: group_id,
+                 new_size: new_size,
+                 public_key_hash: public_key_hash,
+                 passphrase: passphrase},
+                function(resp, textStatus) {
+                    debug(JSON.stringify(resp));
+
+                    if (resp.status === 'ok') {
+                        resp = resp.resp;
+
+                        if (resp.status === 'ok') {
+                            set_max_post_size_say('Max Post Size Updated');
+                        } else if (resp.status === 'error') {
+                            handle_error1(resp, set_max_post_size_say);
+                        } else {
+                        }
+                    } else if (resp.status === 'error') {
+                        handle_error2(resp, set_max_post_size_say, "node key", pass_dialog, set_max_post_size);
+                    } else {
+                    }
+                });
+}
 
 window.onload = function() {
 
@@ -530,6 +569,9 @@ key: <span class="public-key-hash"></span>
        <button onclick="change_group_quota();">Set</button>
        <span id="change-group-quota-say" onclick="change_group_quota_say('');"></span>
   </ul>
+<li> Max Post Size: <input id="max-post-size"></input>
+    <button onclick="set_max_post_size();">Set</button>
+    <span id="set-max-post-size-message" onclick="set_max_post_size_say('');"></span>
 <li> Last Post Time: <span id="last-post-time"></span>
 </ul>
 

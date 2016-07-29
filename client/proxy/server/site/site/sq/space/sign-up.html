@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>
+Sign Up
+</title>
+
+<link rel="stylesheet" type="text/css" href="all.css">
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/space/site-util.js"></script>
+<script type="text/javascript">
+
+function say(mesg) {
+    $('#message').text(mesg);
+}
+
+
+function sign_up() {
+    var user_id = $('#user-id').val(),
+        password = $('#password').val(),
+        node_name = $('#node-nickname').val(),
+        real_node_name = $('#real-node-name').val(),
+        node_address = $('#node-address').val(),
+        user_class = $('#user-class').val(),
+        auth_token = $('#auth-token').val();
+
+    $('#sign-up-message').show();
+    $('#sign-up-button').hide();
+
+    if (user_id === '') {
+        say('User ID required');
+    } else if (password === '') {
+        say('Password required');
+    } else if (real_node_name === '') {
+        say('Node Name required');
+    } else if (node_address === '') {
+        say('Node Address required');
+    } else if (node_name === '') {
+        say('Node Nickname required');
+    } else {
+        var transaction = new SignUpTransaction(
+                    user_id, password,
+                    node_name, real_node_name, node_address,
+                    user_class, auth_token);
+
+        transaction.start();
+    }
+}
+
+function SignUpTransaction(
+        user_id, password,
+        node_name, real_node_name, node_address,
+        user_class, auth_token) {
+
+    this.state = null;
+
+    this.user_id = user_id;
+    this.password = password;
+    this.node_name = node_name;
+    this.real_node_name = real_node_name;
+    this.node_address = node_address;
+    this.user_class = user_class;
+    this.auth_token = auth_token;
+
+    this.default_message_access = 'allow';
+    this.when_mail_exhausted = 'block';
+    this.max_message_size = 50*1024*1024;
+
+    this.group_id = 'group';
+    this.group_read_access = 'allow';
+/*
+    this.group_post_access =
+        'proof_of_work/' +
+        JSON.stringify(
+                {algorithm: 'hashcash',
+                 bits: 20,
+                 salt_chars: 8});
+*/
+    this.group_post_access = 'allow'; // If spam gets bad, switch to proof_of_work with hashcash.
+    this.group_delete_access = 'allow';
+    this.when_group_exhausted = 'free_oldest';
+    this.max_post_size = 50*1024*1024;
+
+    this.profile_id = 'profile';
+    this.profile_read_access = 'allow';
+    this.profile_post_access = 'allow';
+    this.profile_delete_access = 'allow';
+    this.when_profile_exhausted = 'block';
+    this.profile_max_post_size = null;
+
+    this.mail_quota_ratio = .25;
+    this.group_quota_ratio = .60;
+    this.profile_quota_ratio = .10;
+
+
+    this.private_key_list = null;
+    this.user_key_list = null;
+    this.group_key_list = null;
+    this.used_private_keys_table = null;
+    this.unused_private_keys = null;
+
+    this.user_key_hash = null;
+    this.group_key_hash = null;
+    this.local_version = null;
+    this.node_version = null;
+    this.quota_available = null;
+    this.quota_size = null;
+    this.mail_quota_size = null;
+    this.group_quota_size = null;
+    this.profile_quota_size = null;
+}
+
+SignUpTransaction.prototype.change_state = function(new_state) {
+    var div = $('#account-creation-div'),
+        span = $('#state-message');
+    this.state = new_state;
+    span.text(new_state);
+    div.show();
+};
+
+SignUpTransaction.prototype.handle_error = function(resp) {
+    $('#sign-up-message').hide();
+    $('#sign-up-button').show();
+
+    if (resp.reason === 'bad session id' ||
+        resp.reason === 'cookie required') {
+        this.login_again();
+    } else {
+        say(resp.reason);
+    }
+};
+
+SignUpTransaction.prototype.call_state = function(state_name) {
+    if (old_state === 'read_local_version')
+        this.read_version();
+    else if (old_state === 'create_local_user')
+        this.create_local_user();
+    else if (old_state === 'create_user_key')
+        this.create_user_key();
+    else if (old_state === 'create_group_key')
+        this.create_group_key();
+    else if (old_state === 'assign_node_address')
+        this.assign_node_address();
+    else if (old_state === 'cache_passphrase')
+        this.cache_passphrase();
+    else if (old_state === 'read_node_version')
+        this.read_node_version();
+    else if (old_state === 'read_quota_available')
+        this.read_quota_available();
+    else if (old_state === 'assign_user_key')
+        this.assign_user_key();
+    else if (old_state === 'create_node_user')
+        this.create_node_user();
+    else if (old_state === 'create_group')
+        this.create_group();
+    else if (old_state === 'create_profile')
+        this.create_profile();
+    else if (old_state === 'done')
+        this.done();
+};
+
+// Key generation takes a long time and the session may expire.
+// Login again and continue if this happens.
+SignUpTransaction.prototype.login_again = function() {
+    var trans = this,
+        old_state = this.state;
+
+    this.change_state('login');
+
+    squeakclient.local.login(
+            {user_id: this.user_id,
+             password: this.password},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    trans.call_state(old_state);
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+SignUpTransaction.prototype.start = function() {
+    this.change_state('start');
+    this.read_local_version();
+};
+
+SignUpTransaction.prototype.read_local_version = function() {
+    var trans = this;
+    this.change_state('read_local_version');
+
+    squeakclient.local.read_version(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    trans.local_version = resp.version;
+                    trans.create_local_user();
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+SignUpTransaction.prototype.create_local_user = function() {
+    var trans = this;
+    this.change_state('create_local_user');
+
+    squeakclient.local.create_user(
+            {user_id: trans.user_id,
+             password: trans.password},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    trans.check_node_address();
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'local user exists') {
+                        trans.login();
+                    } else {
+                        trans.handle_error(resp);
+                    }
+                }
+            });
+};
+
+SignUpTransaction.prototype.login = function() {
+    var trans = this;
+    trans.change_state('login');
+
+    squeakclient.local.login(
+            {user_id: trans.user_id,
+             password: trans.password},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    trans.check_node_address();
+                } else if (resp.status === 'error') {
+                    // TODO: handle password error and report.
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+SignUpTransaction.prototype.check_node_address = function() {
+    var trans = this;
+    trans.change_state('check_node_address');
+
+    squeakclient.local.read_node_addr(
+            {node_name: trans.node_name},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    var addr = resp.addr;
+
+                    if (addr.url === trans.node_address && addr.real_node_name === trans.real_node_name) {
+                        trans.read_node_version();
+                    } else {
+                        trans.handle_error({status: 'error', reason: 'node addr conflict'});
+                    }
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'node addr not found') {
+                        trans.assign_node_address();
+                    } else {
+                        trans.handle_error(resp);
+                    }
+                }
+            });
+};
+
+
+SignUpTransaction.prototype.assign_node_address = function() {
+    var trans = this;
+    trans.change_state('assign_node_address');
+
+    squeakclient.local.set_node_addr(
+            {node_name: trans.node_name,
+             url: trans.node_address,
+             real_node_name: trans.real_node_name},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    trans.read_node_version();
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+SignUpTransaction.prototype.read_node_version = function() {
+    var trans = this;
+    trans.change_state('read_node_version');
+
+    squeakclient.proxy.read_version(
+            {node_name: trans.node_name},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    if (resp.resp.status === 'ok') {
+                        trans.node_version = resp.resp.version;
+
+                        // TODO: Check version compatibility.
+
+                        trans.check_username();
+                    } else if (resp.resp.status === 'error') {
+                        trans.handle_error(resp.resp);
+                    }
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+SignUpTransaction.prototype.check_username = function() {
+    var trans = this;
+    trans.change_state('check_username');
+
+    squeakclient.proxy.query_user(
+            {node_name: trans.node_name,
+             other_user_id: trans.user_id},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    if (resp.resp.status === 'ok') {
+                        if (resp.resp.user_exists) {
+                            trans.handle_error({status: 'error', reason: 'username taken'});
+                        } else {
+                            trans.get_private_key_list();
+                        }
+                    } else if (resp.resp.status === 'error') {
+                        trans.handle_error(resp.resp);
+                    }
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+
+SignUpTransaction.prototype.get_private_key_list = function() {
+    var trans = this;
+    trans.change_state('get_private_key_list');
+
+    squeakclient.local.list_private_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    trans.private_key_list = resp.keys;
+                    trans.get_user_key_list();
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+SignUpTransaction.prototype.get_user_key_list = function() {
+    var trans = this;
+    trans.change_state('get_user_key_list');
+
+    squeakclient.local.list_user_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    trans.user_key_list = resp.keys;
+                    trans.get_group_key_list();
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+SignUpTransaction.prototype.get_group_key_list = function() {
+    var trans = this;
+    trans.change_state('get_group_key_list');
+
+    squeakclient.local.list_group_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    trans.group_key_list = resp.keys;
+                    trans.compute_unused_private_keys();
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+SignUpTransaction.prototype.compute_unused_private_keys = function() {
+    var trans = this;
+    trans.change_state('compute_unused_private_keys');
+
+    trans.used_private_keys_table = {};
+
+    var i = 0,
+        length = trans.user_key_list.length;
+
+    for ( ; i < length; i++ ) {
+        var public_key_hash = trans.user_key_list[i].public_key_hash;
+
+        trans.used_private_keys_table[public_key_hash] = true;
+    }
+    
+    length = trans.group_key_list.length;
+
+    for ( i = 0; i < length; i++ ) {
+        var public_key_hash = trans.group_key_list[i].public_key_hash;
+
+        trans.used_private_keys_table[public_key_hash] = true;
+    }
+
+    length = trans.private_key_list.length;
+
+    trans.unused_private_keys = [];
+
+    for ( i = 0; i < length; i++ ) {
+        var public_key_hash = trans.private_key_list[i];
+
+        if (trans.used_private_keys_table[public_key_hash] === undefined) {
+            trans.unused_private_keys.push(public_key_hash);
+        }
+    }
+
+    trans.check_user_key();
+};
+
+
+SignUpTransaction.prototype.check_user_key = function() {
+    var trans = this;
+    this.change_state('check_user_key');
+
+    squeakclient.local.list_user_keys(
+            {node_name: trans.node_name},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    var keys = resp.keys;
+
+                    if (keys.length === 0) {
+                        trans.create_user_key();
+                    } else {
+                        trans.user_key_hash = keys[0].public_key_hash;
+                        trans.cache_passphrase();
+                    }
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+
+SignUpTransaction.prototype.create_user_key = function() {
+    var trans = this;
+    this.change_state('create_user_key');
+
+    squeakclient.local.generate_private_key(
+            {key_type: 'pgp', // 'dummy',
+             key_parameters: JSON.stringify(
+                 {name_real: trans.user_id,
+                  name_email: trans.user_id,
+                  key_type: 'RSA',
+                  key_length: 4096,
+                  passphrase: trans.password}),
+             revoke_date: null,
+             passphrase: trans.password},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    trans.user_key_hash = resp.public_key_hash;
+                    trans.assign_user_key();
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+
+SignUpTransaction.prototype.assign_user_key = function() {
+    var trans = this;
+    this.change_state('assign_user_key');
+
+    squeakclient.local.assign_user_key(
+            {node_name: trans.node_name,
+             public_key_hash: trans.user_key_hash},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    trans.cache_passphrase();
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+
+SignUpTransaction.prototype.cache_passphrase = function() {
+    var trans = this;
+    trans.change_state('cache_passphrase');
+
+    squeakclient.local.cache_passphrase(
+            {public_key_hash: trans.user_key_hash,
+             passphrase: trans.password,
+             expire_time: null},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    trans.find_group_key();
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+SignUpTransaction.prototype.find_group_key = function() {
+    var trans = this;
+    trans.change_state('find_group_key');
+
+    // Using a stray key might be a bad idea in terms of security.
+    // Just make a new one.
+    trans.create_group_key();
+
+    /*
+    if (trans.unused_private_keys.length > 0) {
+        trans.group_key_hash = trans.unused_private_keys[0];
+        trans.read_quota_available();
+    } else {
+        trans.create_group_key();
+    }
+    */
+};
+
+
+SignUpTransaction.prototype.create_group_key = function() {
+    var trans = this;
+    trans.change_state('create_group_key');
+
+    squeakclient.local.generate_private_key(
+            {key_type: 'pgp', // 'dummy'
+             key_parameters: JSON.stringify(
+                 {name_real: trans.user_id,
+                  name_email: trans.user_id,
+                  key_type: 'RSA',
+                  key_length: 4096}),
+             revoke_date: null},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    trans.group_key_hash = resp.public_key_hash;
+                    trans.read_quota_available();
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+
+
+SignUpTransaction.prototype.read_quota_available = function() {
+    var trans = this;
+    this.change_state('read_quota_available');
+
+    squeakclient.proxy.read_quota_available(
+            {node_name: trans.node_name},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    if (resp.resp.status === 'ok') {
+                        trans.quota_available = resp.resp.quota_available;
+                        trans.quota_size = trans.quota_available;
+                        trans.mail_quota_size = Math.floor(trans.quota_size*trans.mail_quota_ratio);
+                        trans.group_quota_size = Math.floor(trans.quota_size*trans.group_quota_ratio);
+                        trans.profile_quota_size = Math.floor(trans.quota_size*trans.profile_quota_ratio);
+
+                        trans.create_node_user();
+                    } else if (resp.resp.status === 'error') {
+                        trans.handle_error(resp.resp);
+                    }
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+
+SignUpTransaction.prototype.create_node_user = function() {
+    var trans = this;
+    this.change_state('create_node_user');
+
+    squeakclient.proxy.create_user(
+            {node_name: trans.node_name,
+             public_key_hash: trans.user_key_hash,
+             default_message_access: trans.default_message_access,
+             when_mail_exhausted: trans.when_mail_exhausted,
+             quota_size: trans.quota_size,
+             mail_quota_size: trans.mail_quota_size,
+             max_message_size: trans.max_message_size,
+             user_class: trans.user_class,
+             auth_token: trans.auth_token},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    if (resp.resp.status === 'ok') {
+
+                        trans.create_group();
+                    } else if (resp.resp.status === 'error') {
+                        trans.handle_error(resp.resp);
+                    }
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+
+
+SignUpTransaction.prototype.create_group = function() {
+    var trans = this;
+    this.change_state('create_group');
+
+    squeakclient.proxy.create_group(
+            {node_name: trans.node_name,
+             group_id: trans.group_id,
+
+             post_access: trans.group_post_access,
+             read_access: trans.group_read_access,
+             delete_access: trans.group_delete_access,
+
+             posting_key_hash: trans.group_key_hash,
+             reading_key_hash: trans.group_key_hash,
+             delete_key_hash: trans.user_key_hash,
+
+             quota_allocated: trans.group_quota_size,
+             when_space_exhausted: trans.when_group_exhausted,
+             max_post_size: trans.max_post_size,
+             public_key_hash: trans.user_key_hash},
+
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    if (resp.resp.status === 'ok') {
+
+                        trans.create_profile();
+                    } else if (resp.resp.status === 'error') {
+                        if (resp.resp.reason === 'group exists') {
+                            trans.create_profile();
+                        } else {
+                            trans.handle_error(resp.resp);
+                        }
+                    }
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+
+SignUpTransaction.prototype.create_profile = function() {
+    var trans = this;
+    this.change_state('create_profile');
+
+    squeakclient.proxy.create_group(
+            {node_name: trans.node_name,
+             group_id: trans.profile_id,
+
+             post_access: trans.profile_post_access,
+             read_access: trans.profile_read_access,
+             delete_access: trans.profile_delete_access,
+
+             posting_key_hash: trans.user_key_hash,
+             reading_key_hash: trans.group_key_hash,
+             delete_key_hash: trans.user_key_hash,
+
+             quota_allocated: trans.profile_quota_size,
+             when_space_exhausted: trans.when_profile_exhausted,
+             max_post_size: trans.profile_max_post_size,
+             public_key_hash: trans.user_key_hash},
+
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    if (resp.resp.status === 'ok') {
+
+                        trans.done();
+                    } else if (resp.resp.status === 'error') {
+                        if (resp.resp.reason === 'group exists') {
+                            trans.done();
+                        } else {
+                            trans.handle_error(resp.resp);
+                        }
+                    }
+                } else if (resp.status === 'error') {
+                    trans.handle_error(resp);
+                }
+            });
+};
+
+SignUpTransaction.prototype.done = function() {
+    var trans = this;
+    this.change_state('done');
+
+    window.location = "home.html";
+};
+
+
+
+</script>
+</head>
+<body>
+
+<div>
+<span>Sign Up</span>
+<a href="login.html">Login</a>
+</div>
+
+<div>
+<label>Username:
+<input id="user-id">
+</label><br/>
+<label>Password:
+<input id="password" type="password">
+</label><br/>
+<label>
+Node Name:
+<input id="real-node-name">
+</label><br/>
+<label>
+Node Address:
+<input id="node-address">
+</label><br/>
+<label>
+Node Nickname:
+<input id="node-nickname">
+</label><br/>
+<label>
+User Class:
+<input id="user-class">
+</label><br/>
+<label>
+Auth Token:
+<input id="auth-token">
+</label>
+</div>
+<button id="sign-up-button" onclick="sign_up();">sign up</button>
+
+<div style="display:none;" id="sign-up-message">
+    Account creation may take a long time due to key generation.
+    Doing something else on your device may help speed up key generation by providing more entropy.
+    Try moving the mouse around for a while.
+    If you close the window during account creation, you can try again later
+    by entering the same information above.<br/><br/>
+    
+    Please wait...
+</div>
+
+<div>
+<span id="message"></span>
+</div>
+
+<div id="account-creation-div" style="display:none;">
+<span>Account Creation: </span>
+<span id="state-message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+<div onclick="update_cookie();">
+<span>Cookie:</span>
+<span id="cookie_message"></span>
+</div>
+</body>
+</html>

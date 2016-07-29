@@ -47,6 +47,22 @@ class ExpiredTimeStampException(SqueakException):
                 'acceptable_delay' : self.acceptable_delay}
 
 
+class OutOfOrderTimeStampException(SqueakException):
+    type = SqueakStatusCodes.bad_request
+
+    def __init__(self, timestamp, last_timestamp):
+        self.timestamp = timestamp
+        self.last_timestamp = last_timestamp 
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type, 
+                'reason' : 'out of order timestamp',
+                'timestamp' : self.timestamp,
+                'last_timestamp' : self.last_timestamp}
+
+
+
 class QuotaExceededException(SqueakException):
     type = SqueakStatusCodes.too_large
 
@@ -225,6 +241,22 @@ class UserNameTakenException(SqueakException):
                 'reason' : 'username taken',
                 'name' : self.name}
 
+
+class UserQuotaTooLargeException(SqueakException):
+    type = SqueakStatusCodes.bad_request
+
+    def __init__(self, requested_quota, max_quota):
+        self.requested_quota = requested_quota
+        self.max_quota = max_quota
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type, 
+                'reason' : 'user quota too large',
+                'requested_quota' : self.requested_quota,
+                'max_quota' : self.max_quota}
+
+
 class MailQuotaExceedsUserQuotaException(SqueakException):
     type = SqueakStatusCodes.bad_request
 
@@ -379,12 +411,10 @@ class GroupPostInPastException(SqueakException):
 class GroupPostIdExists(SqueakException):
     type = SqueakStatusCodes.conflict
 
-    def __init__(self, post_id, existing_timestamp, group_id, owner_id, existing_data_hash):
+    def __init__(self, post_id, group_id, owner_id):
         self.post_id = post_id
-        self.existing_timestamp = existing_timestamp 
         self.group_id = group_id
         self.owner_id = owner_id
-        self.existing_data_hash = existing_data_hash 
 
     def dict(self):
         return {'status' : 'error',
@@ -561,4 +591,46 @@ class BadPassphraseException(SqueakException):
 class SimpleBadPassphraseException(Exception):
     pass
 
+
+class MessageIdExistsException(SqueakException):
+    type = SqueakStatusCodes.bad_request
+
+    def __init__(self, to_user, message_id):
+        self.to_user = to_user
+        self.message_id = message_id
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type,
+                'reason' : 'message id exists',
+                'to_user' : self.to_user,
+                'message_id' : self.message_id}
+
+class MessageTooLargeException(SqueakException):
+    type = SqueakStatusCodes.bad_request
+
+    def __init__(self, message_size, max_message_size):
+        self.message_size = message_size
+        self.max_message_size = max_message_size
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type,
+                'reason' : 'message too large',
+                'message_size' : self.message_size,
+                'max_message_size' : self.max_message_size}
+
+class PostTooLargeException(SqueakException):
+    type = SqueakStatusCodes.bad_request
+
+    def __init__(self, post_size, max_post_size):
+        self.post_size = post_size
+        self.max_post_size = max_post_size
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type,
+                'reason' : 'post too large',
+                'post_size' : self.post_size,
+                'max_post_size' : self.max_post_size}
 

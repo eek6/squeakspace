@@ -11,6 +11,9 @@ def get_handler(environ):
     timestamp = ht.convert_int(ht.get_required(query, 'timestamp'), 'timestamp')
     node_name = ht.get_required(query, 'node_name')
     user_id = ht.get_required(query, 'user_id')
+    to_user_key = ht.get_optional(query, 'to_user_key')
+    from_user = ht.get_optional(query, 'from_user')
+    from_user_key = ht.get_optional(query, 'from_user_key')
     start_time = ht.convert_int(ht.get_optional(query, 'start_time'), 'start_time')
     end_time = ht.convert_int(ht.get_optional(query, 'end_time'), 'end_time')
     max_records = ht.convert_int(ht.get_optional(query, 'max_records'), 'max_records')
@@ -21,8 +24,10 @@ def get_handler(environ):
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        message_list = db.read_message_list(c, timestamp, node_name, user_id, start_time, end_time,
-                                            max_records, order, public_key_hash, signature)
+        message_list = db.read_message_list(c, timestamp, node_name, user_id,
+                                            to_user_key, from_user, from_user_key,
+                                            start_time, end_time, max_records, order,
+                                            public_key_hash, signature)
 
         raise ht.ok_json({'status' : 'ok', 'message_list' : message_list})
 

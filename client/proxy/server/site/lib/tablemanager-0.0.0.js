@@ -23,8 +23,6 @@ TableManager.prototype.addRow = function(row_data) {
         $('<td>').append(row_data[i]).appendTo(row);
     }
     row.appendTo(this.root);
-
-    //alert(JSON.stringify(this.root));
 };
 
 TableManager.prototype.forBoxes = function(f) {

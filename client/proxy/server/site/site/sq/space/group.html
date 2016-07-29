@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>
+Group
+</title>
+
+<link rel="stylesheet" type="text/css" href="all.css">
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/cookielib-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/space/site-util.js"></script>
+<script type="text/javascript" src="/site/sq/space/postsmanager.js"></script>
+<script type="text/javascript" src="/lib/bin64.js"></script>
+<script type="text/javascript" src="/site/sq/space/data-to-url.js"></script>
+<script type="text/javascript" src="/site/sq/space/message-util.js"></script>
+<script type="text/javascript" src="/site/sq/space/file-loader.js"></script>
+<script type="text/javascript">
+
+params = querystring.load();
+cookies = cookielib.parse(document.cookie);
+window_manager = null;
+default_identity = null;
+can_reply_to_anonymous = true;
+delete_access = null;
+post_access = null;
+read_access = null;
+
+FileLoader = get_FileLoader();
+
+function say(mesg) {
+    $('#message').text(mesg);
+}
+
+
+// disable debug printing here because messages are sometimes too large.
+debug = function(obj) {
+};
+
+
+function handle_error(resp) {
+    if (resp.reason === 'bad session id' ||
+        resp.reason === 'cookie required') {
+        window.location = 'login.html';
+    } else {
+        say(resp.reason);
+    }
+}
+
+
+// methods.load_headers_starting(start_time, max_records, callback) // callback(array)
+// methods.load_headers_ending(end_time, max_records, callback) // callback(array)
+// methods.load_post(post_header, callback) // callback(post, outer_validation)
+// methods.validate_post(post, callback) // callback(inner_validation)
+// methods.post_timestamp(post)
+// methods.make_block_div(window_div, position) // position = 'start' or 'end'
+// methods.publish_post(block_div, post, inner_validation, outer_validation)
+// methods.remove_div(div)
+
+GroupMethods = function(node_name, owner_id, group_id, read_passphrase, handlers) {
+    this.node_name = node_name;
+    this.owner_id = owner_id;
+    this.group_id = group_id;
+    this.read_passphrase = read_passphrase;
+
+    this.handlers = handlers;
+    handlers.debug = handlers.debug || function(x) {};
+    handlers.error = handlers.error || function(x) {};
+    handlers.proxy_error = handlers.proxy_error || function(x) {};
+};
+
+GroupMethods.prototype.load_headers_starting = function(start_time, max_records, callback) {
+    var methods = this;
+
+    squeakclient.proxy.read_post_list(
+            {node_name: methods.node_name,
+             group_id: methods.group_id,
+             owner_id: methods.owner_id,
+             start_time: start_time,
+             end_time: null,
+             max_records: max_records,
+             order: 'asc',
+             passphrase: methods.read_passphrase},
+            function(resp, textStatus) {
+                methods.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        var post_list = proxy_resp.post_list;
+
+                        callback(post_list);
+                    } else if (proxy_resp.status === 'error') {
+                        methods.handlers.proxy_error(proxy_resp);
+                    }
+                } else if (resp.status === 'error') {
+                    methods.handlers.error(resp);
+                }
+            });
+}
+
+GroupMethods.prototype.load_headers_ending = function(end_time, max_records, callback) {
+    var methods = this;
+
+    squeakclient.proxy.read_post_list(
+            {node_name: methods.node_name,
+             group_id: methods.group_id,
+             owner_id: methods.owner_id,
+             start_time: null,
+             end_time: end_time,
+             max_records: max_records,
+             order: 'desc',
+             passphrase: methods.read_passphrase},
+            function(resp, textStatus) {
+                methods.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        var post_list = proxy_resp.post_list;
+
+                        callback(post_list);
+                    } else if (proxy_resp.status === 'error') {
+                        methods.handlers.proxy_error(proxy_resp);
+                    }
+                } else if (resp.status === 'error') {
+                    methods.handlers.error(resp);
+                }
+            });
+};
+
+GroupMethods.prototype.load_post = function(post_header, callback) {
+    var methods = this;
+
+    squeakclient.proxy.read_post(
+            {node_name: methods.node_name,
+             group_id: methods.group_id,
+             owner_id: methods.owner_id,
+             post_id: post_header.post_id,
+             passphrase: methods.read_passphrase,
+             decrypt_post: true},
+            function(resp, textStatus) {
+                methods.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        var post = proxy_resp.post,
+                            validation = resp.validation;
+
+                        callback(post, validation);
+                    } else if (proxy_resp.status === 'error') {
+                        methods.handlers.proxy_error(proxy_resp);
+                    }
+                } else if (resp.status === 'error') {
+                    methods.handlers.error(resp);
+                }
+            });
+};
+
+GroupMethods.prototype.validate_post = function(post, callback) {
+    validate_message(post.data, cookies.user_id, debug, handle_error, callback);
+};
+
+GroupMethods.prototype.post_timestamp = function(post) {
+    return post.timestamp;
+};
+
+GroupMethods.prototype.make_block_div = function(window_div, position) {
+    var div = $('<div>').attr('style', 'padding:12px;');
+
+    if (position === 'start') {
+        window_div.prepend(div);
+    } else if (position === 'end') {
+        window_div.append(div);
+    }
+
+    return div;
+};
+
+GroupMethods.prototype.publish_post = function(block_div, post, inner_validation, outer_validation) {
+    var timestamp = post.timestamp,
+        hash = post.post_id,
+        div_data = {id: {timestamp: timestamp,
+                         hash: hash}};
+
+    publish_message(block_div, div_data, inner_validation, outer_validation);
+};
+
+GroupMethods.prototype.remove_div = function(div) {
+    div.remove();
+};
+
+
+function read_later() {
+
+    var buttons = $('.read-button'),
+        loading_div = $('#loading-later-div'),
+        no_more_div = $('#no-later-div'),
+        no_more_divs = $('.no-more-div');
+
+    no_more_divs.hide();
+    loading_div.show();
+    buttons.hide();
+
+    window_manager.shift_blocks_forward(
+            {
+                done: function() {
+                    loading_div.hide();
+                    buttons.show();
+                },
+                empty: function() {
+                    loading_div.hide();
+                    no_more_div.show();
+                    buttons.show();
+                }
+            });
+}
+
+function read_earlier() {
+
+    var buttons = $('.read-button'),
+        loading_div = $('#loading-earlier-div'),
+        no_more_div = $('#no-earlier-div'),
+        no_more_divs = $('.no-more-div');
+
+    no_more_divs.hide();
+    loading_div.show();
+    buttons.hide();
+
+    window_manager.shift_blocks_backward(
+            {
+                done: function() {
+                    loading_div.hide();
+                    buttons.show();
+                },
+                empty: function() {
+                    loading_div.hide();
+                    no_more_div.show();
+                    buttons.show();
+                }
+            });
+}
+
+function load_identity_list(lists) {
+
+    var user_id = cookies.user_id;
+
+    squeakclient.local.list_user_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0;
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i],
+                            node_name = key.node_name,
+                            public_key_hash = key.public_key_hash,
+                            visible_value = user_string(node_name, user_id) + ' ' + public_key_hash,
+                            value = JSON.stringify([node_name, public_key_hash]),
+                            option = $('<option>').val(value).text(visible_value);
+
+                        lists.append(option);
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+
+function delete_post(delete_button) {
+    var node_name = params.node,
+        owner_id = params.owner,
+        group_id = params.group,
+        delete_passphrase = null,
+
+        id_div = delete_button.parent().parent(),
+        post_div = id_div.parent(),
+        id_span = id_div.find('.hash'),
+        post_id = id_span.text();
+
+    squeakclient.proxy.delete_post(
+            {node_name: node_name,
+             group_id: group_id,
+             owner_id: owner_id,
+             post_id: post_id,
+             passphrase: delete_passphrase},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        post_div.remove();
+                    } else if (proxy_resp.status === 'error') {
+                        handle_error(proxy_resp);
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+function PostReplyTransaction(post_div) {
+    var trans = this;
+
+    trans.post_div = post_div;
+
+    trans.node_name = params.node;
+    trans.owner_id = params.owner;
+    trans.group_id = params.group;
+
+    trans.from_div = post_div.find('.from-div');
+    trans.data_div = post_div.find('.data-div');
+    trans.id_div = post_div.find('.id-div');
+    trans.reply_div = post_div.find('.reply-div');
+    trans.buttons_div = trans.reply_div.find('.buttons');
+    trans.reply_sent_div = trans.reply_div.find('.reply-sent-div');
+    trans.reply_status_span = trans.reply_sent_div.find('.reply-status');
+    trans.try_again_span = trans.reply_div.find('.try-again');
+    trans.reply_textarea = trans.reply_div.find('.reply-text');
+
+    trans.reply_to = trans.id_div.find('.hash').text();
+
+    trans.post_text = trans.reply_textarea.val();
+    trans.file_input = trans.reply_div.find('.file-input')[0];
+
+    trans.from_user = null;
+    trans.from_user_str = trans.reply_div.find('.reply-as-select').val();
+    trans.from_node = null;
+    trans.from_key_hash = null;
+    trans.from_key_passphrase = null;
+
+    trans.post_passphrase = null;
+
+    trans.timestamp = get_timestamp();
+    trans.post_str = null;
+    trans.file_loader = null;
+    trans.builder = null;
+
+    trans.post_obj = [];
+
+    if (trans.from_user_str !== '') {
+        var from_user_obj = JSON.parse(trans.from_user_str);
+
+        trans.from_node = from_user_obj[0];
+        trans.from_user = cookies.user_id;
+        trans.from_key_hash = from_user_obj[1];
+
+        trans.post_obj.push(['from', trans.from_node, trans.from_user, trans.from_key_hash]);
+    }
+
+    trans.post_obj.push(['time', trans.timestamp]);
+    trans.post_obj.push(['re', trans.reply_to]);
+    trans.post_obj.push(['message', trans.post_text]);
+}
+
+PostReplyTransaction.prototype.start = function() {
+    this.buttons_div.hide();
+    this.reply_status_span.text('');
+
+    if (this.file_input.files.length === 0) {
+        this.build_post();
+    } else if (FileLoader === null) {
+        this.try_again_span.text('File loading is not supported.');
+        this.buttons_div.show();
+    } else {
+        this.load_files();
+    }
+};
+
+PostReplyTransaction.prototype.load_files = function() {
+    var trans = this,
+        handlers = {
+            done: function(values) {
+                trans.post_obj.push(['files', values]);
+                trans.build_post();
+            },
+            error: function(i, err) {
+                trans.try_again_span.text('Error encountered while loading attachment ' + i);
+                trans.buttons_div.show();
+                alert(JSON.stringify(err));
+            }
+        };
+
+    trans.file_loader = new FileLoader(trans.file_input, handlers);
+    trans.file_loader.start();
+};
+
+PostReplyTransaction.prototype.build_post = function() {
+    var trans = this;
+
+    trans.builder = new MessageConstructor(
+            trans.from_key_hash,
+            trans.from_key_passphrase,
+            trans.post_obj,
+            {
+                state_changed: function(new_state) {
+                    $('#message-constructor-state').text(new_state);
+                },
+                debug: debug,
+                error: handle_error,
+                done: function(post_str) {
+                    trans.post_str = post_str;
+                    trans.send();
+                }
+            });
+
+    trans.builder.start();
+};
+
+PostReplyTransaction.prototype.send = function() {
+    var trans = this;
+
+    squeakclient.proxy.make_post(
+            {node_name: trans.node_name,
+             group_id: trans.group_id,
+             owner_id: trans.owner_id,
+             data: trans.post_str,
+             passphrase: trans.post_passphrase,
+             force_encryption: true},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        var post_id = resp.post_id;
+                        trans.reply_status_span.text('Post Submitted: ' + post_id);
+                        trans.reply_sent_div.show();
+                        trans.reply_textarea.attr('readonly', true);
+
+                    } else if (proxy_resp.status === 'error') {
+                        trans.try_again_span.text('Proxy error: ' + proxy_resp.reason);
+                        handle_error(proxy_resp);
+                    }
+
+                } else if (resp.status === 'error') {
+                    trans.try_again_span.text('Local error: ' + resp.reason);
+                    handle_error(resp);
+                }
+            });
+};
+
+function reply_button(reply_button) {
+    var reply_div = reply_button.parent(),
+        holder = reply_div.find('.reply-holder');
+
+    $('.reply-holder').hide();
+    $('.reply-button').show();
+    holder.show();
+    reply_button.hide();
+}
+
+function reply_send(send_button) {
+    var post_div = send_button.parent().parent().parent().parent(),
+        trans = new PostReplyTransaction(post_div);
+
+    trans.start();
+}
+
+function reply_cancel(cancel_button) {
+    var holder = cancel_button.parent().parent(),
+        reply_div = holder.parent(),
+        reply_button = reply_div.find('.reply-button');
+
+    holder.hide();
+    reply_button.show();
+}
+
+
+function reply_close(close_button) {
+    var holder = close_button.parent().parent(),
+        reply_div = holder.parent();
+
+    holder.hide();
+    reply_div.find('.reply-status').text('');
+    reply_div.find('.try-again').text('');
+    reply_div.find('.buttons').show();
+    reply_div.find('.reply-sent-div').hide();
+    reply_div.find('.reply-text').val('')
+                                 .attr('readonly', false);
+    reply_div.find('.file-input').val('');
+    reply_div.find('.reply-button').show();
+}
+
+
+function accept_invitation(accept_button) {
+    var invitation_div = accept_button.parent().parent(),
+        data_div = invitation_div.find('.data-div'),
+        status_span = invitation_div.find('.accept-status'),
+        invitation_obj = JSON.parse(data_div.text()),
+        handlers = {
+            error: handle_error,
+            debug: debug,
+            fail: function(report) {
+                status_span.text('Accept Failed: ' + report.reason);
+            },
+            done: function() {
+                status_span.text('Invitation Accepted');
+            }
+        },
+        trans = new AcceptInvitationTransaction(invitation_obj, handlers);
+
+    trans.start();
+}
+
+
+function MakePostTransaction(send_div) {
+    var trans = this;
+
+    trans.send_div = send_div;
+    trans.status_span = send_div.find('.post-status');
+    trans.post_textarea = send_div.find('.post-text');
+
+    trans.node_name = params.node;
+    trans.owner_id = params.owner;
+    trans.group_id = params.group;
+
+    trans.from_user = null;
+    trans.from_user_str = send_div.find('.post-as-select').val();
+    trans.from_node = null;
+    trans.from_key_hash = null;
+    trans.from_key_passphrase = null;
+
+    trans.post_passphrase = null;
+
+    trans.post_text = trans.post_textarea.val();
+    trans.file_input_jq = send_div.find('.file-input');
+    trans.file_input = trans.file_input_jq[0];
+
+    trans.post_obj = [];
+    trans.timestamp = get_timestamp();
+    trans.post_str = null;
+    trans.builder = null;
+    trans.file_loader = null;
+
+    if (trans.from_user_str !== '') {
+        var from_user_obj = JSON.parse(trans.from_user_str);
+
+        trans.from_node = from_user_obj[0];
+        trans.from_user = cookies.user_id;
+        trans.from_key_hash = from_user_obj[1];
+
+        trans.post_obj.push(['from', trans.from_node, trans.from_user, trans.from_key_hash]);
+    }
+
+    trans.post_obj.push(['time', trans.timestamp]);
+    trans.post_obj.push(['message', trans.post_text]);
+}
+
+MakePostTransaction.prototype.start = function() {
+    this.status_span.text('');
+
+    if (this.file_input.files.length === 0) {
+        this.build_post();
+    } else if (FileLoader === null) {
+        this.status_span.text('File loading is not supported.');
+    } else {
+        this.load_files();
+    }
+};
+
+MakePostTransaction.prototype.load_files = function() {
+    var trans = this,
+        handlers = {
+            done: function(values) {
+                trans.post_obj.push(['files', values]);
+                trans.build_post();
+            },
+            error: function(i, err) {
+                trans.status_span.text('Error encountered while loading attachment ' + i);
+                alert(JSON.stringify(err));
+            }
+        };
+
+    trans.file_loader = new FileLoader(trans.file_input, handlers);
+    trans.file_loader.start();
+};
+
+MakePostTransaction.prototype.build_post = function () {
+    var trans = this;
+
+    trans.builder = new MessageConstructor(
+            trans.from_key_hash,
+            trans.from_key_passphrase,
+            trans.post_obj,
+            {
+                state_changed: function(new_state) {
+                    $('#message-constructor-state').text(new_state);
+                },
+                debug: debug,
+                error: handle_error,
+                done: function(post_str) {
+                    trans.post_str = post_str;
+                    trans.send();
+                }
+            });
+
+    trans.builder.start();
+};
+
+MakePostTransaction.prototype.send = function() {
+    var trans = this;
+
+    squeakclient.proxy.make_post(
+            {node_name: trans.node_name,
+             group_id: trans.group_id,
+             owner_id: trans.owner_id,
+             data: trans.post_str,
+             passphrase: trans.post_passphrase,
+             force_encryption: true},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        var post_id = resp.post_id;
+                        trans.status_span.text('Post Submitted: ' + post_id);
+                        trans.post_textarea.val('');
+                        trans.file_input_jq.val('');
+
+                    } else if (proxy_resp.status === 'error') {
+                        trans.status_span.text('Proxy error: ' + proxy_resp.reason);
+                        handle_error(proxy_resp);
+                    }
+
+                } else if (resp.status === 'error') {
+                    trans.status_span.text('Local error: ' + resp.reason);
+                    handle_error(resp);
+                }
+            });
+};
+
+function post_send(send_button) {
+    var new_post_div = send_button.parent().parent(),
+        trans = new MakePostTransaction(new_post_div);
+
+    trans.start();
+}
+
+// handlers = {yes(access), no()}
+function get_group_access(use, handlers) {
+
+    squeakclient.proxy.read_group_access(
+            {group_id: params.group,
+             owner_id: params.owner,
+             node_name: params.node,
+             use: use},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        var access = proxy_resp.access;
+
+                        if (access === 'blocked') {
+                            handlers.no();
+                        } else {
+                            handlers.yes(access);
+                        }
+                    } else if (proxy_resp.status === 'error') {
+                        if (proxy_resp.reason === 'signature null' ||
+                            proxy_resp.reason === 'bad signature') { 
+                            handlers.no();
+                        } else {
+                            handle_error(proxy_resp);
+                        }
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+function GetAccessTransaction(done) {
+    this.done = done;
+};
+
+GetAccessTransaction.prototype.start = function() {
+    this.get_delete();
+};
+
+GetAccessTransaction.prototype.get_delete = function() {
+    var trans = this;
+
+    get_group_access(
+            'delete',
+            {
+                yes: function(access) {
+                    delete_access = access;
+                    $('.delete-button').show();
+                    trans.get_post();
+                },
+                no: function() {
+                    $('.delete-button').remove();
+                    trans.get_post();
+                }
+            });
+};
+
+GetAccessTransaction.prototype.get_post = function() {
+    var trans = this;
+
+    get_group_access(
+            'post',
+            {
+                yes: function(access) {
+                    post_access = access;
+                    $('.new-post-div').show();
+                    $('.reply-div').show();
+                    trans.get_read();
+                },
+                no: function() {
+                    $('.new-post-div').remove();
+                    $('.reply-div').remove();
+                    trans.get_read();
+                }
+            });
+}
+
+GetAccessTransaction.prototype.get_read = function() {
+    var trans = this;
+
+    get_group_access(
+            'read',
+            {
+                yes: function(access) {
+                    read_access = access;
+                    $('#posts-div').show();
+                    trans.done();
+                },
+                no: function() {
+                    $('#posts-div').remove();
+                    trans.done();
+                }
+            });
+};
+
+window.onload = function() {
+    var node_name = params.node,
+        owner_id = params.owner,
+        group_id = params.group,
+        group_str = group_string(node_name, owner_id, group_id),
+        read_passphrase = null,
+        handlers = {
+            debug: debug,
+            error: handle_error,
+            proxy_error: handle_error
+        },
+        group_methods = new GroupMethods(node_name, owner_id, group_id, read_passphrase, handlers),
+        block_length = 4,
+        access_trans = new GetAccessTransaction(
+                function() {
+                    if (read_access !== null) {
+                        window_manager = new PostsWindowManager(
+                                $('#post-list'), get_timestamp(), block_length, group_methods);
+
+                        var buttons = $('.read-button'),
+                            loading_div = $('#loading-earlier-div'),
+                            no_more_div = $('#no-earlier-div');
+
+                            buttons.hide();
+                            loading_div.show();
+                            no_more_div.hide();
+
+                        window_manager.init(
+                                'backward',
+                                {
+                                    done: function() {
+                                        loading_div.hide();
+                                        buttons.show();
+                                    },
+                                    empty: function() {
+                                        loading_div.hide();
+                                        no_more_div.show();
+                                        buttons.show();
+                                    }
+                                });
+                    }
+                });
+
+    document.title = group_str;
+
+    load_identity_list($('.identity-list'));
+
+    access_trans.start();
+};
+
+</script>
+</head>
+<body>
+
+<div id="templates" style="display:none;">
+
+<div class="message-div" style="padding:10px;">
+
+    <div class="id-div">
+        <div>
+            <span>ID: <span class="hash"></span></span>
+            <button class="delete-button"
+                    onclick="delete_post($(this));"
+                    style="display:none;">
+                Delete
+            </button>
+        </div>
+        <div>
+            <span>Timestamp: <span class="timestamp"></span></span>
+        </div>
+    </div>
+
+    <div class="from-div">
+        <div class="data-div" style="display:none;">
+            <span class="node"></span>
+            <span class="user"></span>
+            <span class="key-hash"></span>
+        </div>
+
+        <div class="from">From:
+            <a href="#" class="user-link"></a>
+            <span class="key-hash"></span>
+            <span class="trust-span">Trust Score: <span class="trust-score"></span></span>
+
+            <div class="signature-status">
+            </div>
+        </div>
+
+        <div class="from-anonymous">From: <span class="anonymous">Anonymous</span>
+        </div>
+
+    </div>
+
+    <div class="re-div">
+        <span>RE: <a href="#" class="re-link"></a><span>
+    </div>
+
+    <div class="unencrypted-warning">
+        WARNING: This message was sent unencrypted
+    </div>
+
+    <div class="error-div">
+    </div>
+
+    <div class="text-div">
+        <button class="text-button"
+                style="display:none;"
+                onclick="$(this).next().show();$(this).hide();">
+            Show Text
+        </button>
+        <div class="text"></div>
+    </div>
+
+    <div class="files-div">
+    </div>
+
+    <div class="invite-div">
+        <div>Invitation</div>
+        <div class="data-div" style="display:none;"></div>
+        <table>
+            <tr>
+                <td>Key Hash
+                <td>Access Granted
+            </tr>
+            <tbody class="group-key-list">
+            </tbody>
+        </table>
+        <div class="buttons-div">
+            <button onclick="accept_invitation($(this));">Accept</button>
+            <button onclick="$(this).parent().parent().hide();">Decline</button>
+            <span class="accept-status"></span>
+        </div>
+    </div>
+
+    <div class="reply-div" style="display:none;">
+        <button class="reply-button" onclick="reply_button($(this));">Reply</button>
+        <div class="reply-holder" style="display:none;">
+            <div class="reply-as-div">
+                <label>Reply As:
+                    <select class="reply-as-select">
+                        <option value="">Anonymous</option>
+                        <optgroup class="identity-list"></option>
+                    </select>
+                </label>
+            </div>
+            <textarea class="reply-text"></textarea><br/>
+            <label>Attach:
+                <input class="file-input" type="file" multiple>
+            </label>
+            <div class="buttons">
+                <button onclick="reply_send($(this));">Send</button>
+                <button onclick="reply_cancel($(this));">Cancel</button>
+                <span class="try-again"></span>
+            </div>
+            <div class="reply-sent-div" style="display:none;">
+                <button onclick="reply_close($(this));">Close</button>
+                <span class="reply-status"></span>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<table>
+    <tr class="group-key-row">
+        <td class="key-hash"></td>
+        <td class="group-access"></td>
+    </tr>
+</table>
+
+<div class="group-access-div">
+    <span class="group-name"></span>
+    <span class="key-use"></span>
+</div>
+
+</div> <!-- end templates -->
+
+
+<div>
+<span>Group</span>
+<a href="home.html">Home</a>
+</div>
+
+<div id="posts-div" style="display:none;">
+    <button id="read-earlier-button" class="read-button" onclick="read_earlier();">Read Earlier</button>
+
+    <div id="no-earlier-div" class="no-more-div" style="display:none;">
+        No earlier posts.
+    </div>
+
+    <div id="loading-earlier-div" style="display:none;">
+        Loading posts...
+    </div>
+
+    <div id="post-list">
+    </div>
+
+    <div id="loading-later-div" style="display:none;">
+        Loading posts...
+    </div>
+
+    <div id="no-later-div" class="no-more-div" style="display:none;">
+        No later posts.
+    </div>
+
+    <button id="read-later-button" class="read-button" onclick="read_later();">Read Later</button>
+</div>
+
+
+<div>
+New Post:
+
+<div class="new-post-div" style="display:none;">
+    <div>
+        <label>Post as:
+            <select class="post-as-select">
+                <option value="">Anonymous</option>
+                <optgroup class="identity-list"></option>
+            </select>
+        </label>
+    </div>
+    <textarea class="post-text"></textarea><br/>
+    <label>Attach:
+        <input class="file-input" type="file" multiple>
+    </label>
+    <div class="buttons">
+        <button class="send-button" onclick="post_send($(this));">Send</button>
+        <span class="post-status"></span>
+    </div>
+</div>
+
+
+</div>
+
+<div>
+<span>Message Verify State: <span id="message-verify-state"></span></span>
+</div>
+
+<div>
+<span>Message Constructor State: <span id="message-constructor-state"></span></span>
+</div>
+
+<div>
+<span>Send Message State: <span id="send-message-state"></span></span>
+</div>
+
+<div>
+<span id="message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

@@ -85,7 +85,7 @@ squeakclient.local.import_public_key = request({url: '/local/public-key', method
 //
 
 squeakclient.local.read_private_key = request({url: '/local/private-key', method: 'GET'});
-// public_key_hash
+// public_key_hash, only_public_part?, allow_private_user_key?
 
 squeakclient.local.delete_private_key = request({url: '/local/private-key', method: 'DELETE'});
 // public_key_hash
@@ -229,7 +229,7 @@ squeakclient.local.delete_message_access = request({url: '/local/message-access'
 
 
 //
-// local/password.wsgi
+// local/passphrase.wsgi
 //
 
 squeakclient.local.cache_passphrase = request({url: '/local/passphrase', method: 'POST'});
@@ -330,7 +330,11 @@ squeakclient.proxy.read_group_quota = request({url: '/proxy/group-quota', method
 //
 
 squeakclient.proxy.create_group = request({url: '/proxy/group', method: 'POST'});
-// node_name, group_id, quota_allocated, when_space_exhausted, public_key_hash, passphrase
+// node_name, group_id,
+// post_access, read_access, delete_access,
+// posting_key_hash, reading_key_hash, delete_key_hash,
+// quota_allocated, when_space_exhausted, max_post_size,
+// public_key_hash, passphrase
 
 squeakclient.proxy.read_group = request({url: '/proxy/group', method: 'GET'});
 // node_name, group_id, public_key_hash, passphrase 
@@ -360,6 +364,30 @@ squeakclient.proxy.read_last_post_time = request({url: '/proxy/last-post-time', 
 squeakclient.proxy.query_message_access = request({url: '/proxy/query-message-access', method: 'POST'});
 // node_name, to_user, from_user_key_hash, passphrase
 
+
+//
+// proxy/max-message-size.wsgi
+//
+
+squeakclient.proxy.read_max_message_size = request({url: '/proxy/max-message-size', method: 'GET'});
+// node_name, to_user, from_user_key_hash, passphrase
+
+squeakclient.proxy.change_max_message_size = request({url: '/proxy/max-message-size', method: 'POST'});
+// node_name, new_size, public_key_hash, passphrase
+
+
+//
+// proxy/max-post-size.wsgi
+//
+
+
+squeakclient.proxy.read_max_post_size = request({url: '/proxy/max-post-size', method: 'GET'});
+// node_name, group_id, owner_id, passphrase
+
+squeakclient.proxy.change_max_post_size = request({url: '/proxy/max-post-size', method: 'POST'});
+// node_name, group_id, new_size, public_key_hash, passphrase
+
+
 //
 // proxy/message-access.wsgi
 //
@@ -378,7 +406,9 @@ squeakclient.proxy.delete_message_access = request({url: '/proxy/message-access'
 //
 
 squeakclient.proxy.read_message_list = request({url: '/proxy/message-list', method: 'GET'});
-// node_name, start_time, end_time, max_records, order, public_key_hash, passphrase
+// node_name, to_user_key, from_user, from_user_key,
+// start_time, end_time, max_records, order,
+// public_key_hash, passphrase
 
 //
 // proxy/message-quota.wsgi
@@ -443,19 +473,35 @@ squeakclient.proxy.change_user_quota = request({url: '/proxy/user-quota', method
 squeakclient.proxy.read_user_quota = request({url: '/proxy/user-quota', method: 'GET'});
 // node_name, public_key_hash, passphrase
 
+
+//
+// proxy/query-user.wsgi
+//
+
+squeakclient.proxy.query_user = request({url: '/proxy/query-user', method: 'GET'});
+// node_name, other_user_id
+
+
 //
 // proxy/user.wsgi
 //
 
 squeakclient.proxy.create_user = request({url: '/proxy/user', method: 'POST'});
 // node_name, public_key_hash, default_message_access, when_mail_exhausted,
-// quota_size, mail_quota_size, user_class, auth_token 
+// quota_size, mail_quota_size, max_message_size, user_class, auth_token 
 
 squeakclient.proxy.read_user = request({url: '/proxy/user', method: 'GET'});
 // node_name, public_key_hash, passphrase
 
 squeakclient.proxy.delete_user = request({url: '/proxy/user', method: 'DELETE'});
 // node_name, public_key_hash, passphrase
+
+//
+// proxy/quota-available.wsgi
+//
+
+squeakclient.proxy.read_quota_available = request({url: '/proxy/quota-available', method: 'GET'});
+// node_name, user_class
 
 
 //

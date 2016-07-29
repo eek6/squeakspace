@@ -41,11 +41,13 @@ def get_handler(environ):
     session_id = ht.get_required_cookie(cookies, 'session_id')
 
     public_key_hash = ht.get_required(query, 'public_key_hash')
+    only_public_part = ht.convert_bool(ht.get_optional(query, 'only_public_part'), 'only_public_part')
+    allow_private_user_key = ht.convert_bool(ht.get_optional(query, 'allow_private_user_key'), 'allow_private_user_key')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        key = db.read_private_key(c, user_id, session_id, public_key_hash)
+        key = db.read_private_key(c, user_id, session_id, public_key_hash, only_public_part, allow_private_user_key)
 
         raise ht.ok_json({'status' : 'ok', 'key' : key})
         

@@ -24,6 +24,7 @@ def post_handler(environ):
     delete_pub_key = ht.get_optional(query, 'delete_pub_key')
     quota_allocated = ht.convert_int(ht.get_required(query, 'quota_allocated'), 'quota_allocated')
     when_space_exhausted = ht.get_required(query, 'when_space_exhausted')
+    max_post_size = ht.convert_int(ht.get_optional(query, 'max_post_size'), 'max_post_size')
 
     public_key_hash = ht.get_required(query, 'public_key_hash')
     signature = ht.get_required(query, 'signature')
@@ -36,7 +37,8 @@ def post_handler(environ):
                posting_key_type, posting_pub_key,
                reading_key_type, reading_pub_key,
                delete_key_type, delete_pub_key,
-               quota_allocated, when_space_exhausted)
+               quota_allocated, when_space_exhausted,
+               max_post_size)
         db.create_group(c, row, node_name, public_key_hash, signature)
         db.commit(conn)
 

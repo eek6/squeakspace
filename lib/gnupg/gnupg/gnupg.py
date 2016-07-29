@@ -281,18 +281,7 @@ class GPG(GPGBase):
         """
         f = _make_binary_stream(data, self._encoding)
 
-# UNADDED begin
-#
-#       sig_file = None
-#       if sig_data != None:
-#           sig_file = _make_binary_stream(sig_data, self._encoding)
-#
-# UNADDED end
-
-# UNCHANGED
         result = self.verify_file(f)
-#        result = self.verify_file(f, sig_file)
-#
         f.close()
         return result
 

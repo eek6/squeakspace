@@ -123,7 +123,7 @@ PassphraseDialog.prototype.submit = function() {
 PassphraseDialog.prototype.enqueue = function(key_purpose, pkh, task) {
     if (Object.keys(this.key_map).length === 0) {
         this.key_map[pkh] = [key_purpose, new TaskQueue([task])];
-        this.prompt(key_purpose, pkh)
+        this.prompt(key_purpose, pkh);
     } else {
         var data = this.key_map[pkh];
         if (data === undefined) {

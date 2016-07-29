@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>
+Login
+</title>
+
+<link rel="stylesheet" type="text/css" href="all.css">
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/space/site-util.js"></script>
+<script type="text/javascript">
+
+function say(message) {
+    $('#message').text(message);
+}
+
+
+function handle_error(resp) {
+    if (resp.reason === 'field required') {
+        say('Field required: ' + resp.field);
+    } else {
+        say(resp.reason);
+    }
+}
+
+
+function LoginTransaction(user_id, password_input) {
+    this.user_id = user_id;
+    this.password_input = password_input;
+
+    this.password = password_input.val();
+
+    this.user_key_list = null;
+}
+
+LoginTransaction.prototype.start = function() {
+    this.login();
+};
+
+LoginTransaction.prototype.login = function() {
+    var trans = this;
+
+    squeakclient.local.login(
+            {user_id: trans.user_id,
+             password: trans.password},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    trans.load_user_keys();
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'bad password') {
+                        say('Incorrect Password');
+                        trans.password_input.val('');
+                    } else {
+                        handle_error(resp);
+                    }
+                } 
+            });
+};
+
+LoginTransaction.prototype.load_user_keys = function() {
+    var trans = this;
+
+    squeakclient.local.list_user_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys;
+
+                    trans.user_key_list = keys;
+
+                    trans.cache_passphrase(0);
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+};
+
+LoginTransaction.prototype.cache_passphrase = function(i) {
+    var trans = this;
+
+    if (i < trans.user_key_list.length) {
+        var key_hash = trans.user_key_list[i].public_key_hash;
+
+        squeakclient.local.cache_passphrase(
+                {public_key_hash: key_hash,
+                 passphrase: trans.password,
+                 expire_time: null},
+                function(resp, textStatus) {
+                    debug(resp);
+
+                    if (resp.status === 'ok') {
+                        trans.cache_passphrase(i + 1);
+                    } else if (resp.status === 'error') {
+                        handle_error(resp);
+                    }
+                });
+    } else {
+        trans.done();
+    }
+};
+
+LoginTransaction.prototype.done = function() {
+    window.location = 'home.html';
+};
+
+
+function login_button() {
+    var user_id = $('#user-id').val(),
+        password_input = $('#password'),
+        trans = new LoginTransaction(user_id, password_input);
+
+    trans.start();
+}
+
+
+</script>
+</head>
+<body>
+
+<div>
+<span>Login</span>
+<a href="sign-up.html">Sign Up</a>
+</div>
+
+<div>
+<span>
+Username:
+<input id="user-id">
+</span>
+</div>
+<div>
+<span>
+Password:
+<input id="password" type="password">
+</span>
+</div>
+<button onclick="login_button();">login</button>
+<div>
+<span id="message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+
+</body>
+</html>

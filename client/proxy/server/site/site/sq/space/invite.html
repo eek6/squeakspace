@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>
+Invite
+</title>
+
+<link rel="stylesheet" type="text/css" href="all.css">
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/cookielib-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/space/site-util.js"></script>
+<script type="text/javascript">
+
+params = querystring.load();
+cookies = cookielib.parse(document.cookie);
+
+function say(mesg) {
+    $('#message').text(mesg);
+}
+
+
+function handle_error(resp) {
+    if (resp.reason === 'bad session id' ||
+        resp.reason === 'cookie required') {
+        window.location = 'login.html';
+    } else {
+        say(resp.reason);
+    }
+}
+
+user_keys = {};
+function load_from_list(done) {
+
+    var from_list = $('#from-list'),
+        user_id = cookies.user_id;
+
+    squeakclient.local.list_user_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0;
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i],
+                            node_name = key.node_name,
+                            public_key_hash = key.public_key_hash,
+                            visible_value = user_string(node_name, user_id) + ' ' + public_key_hash,
+                            value = JSON.stringify([node_name, public_key_hash]);
+
+                        user_keys[public_key_hash] = true;
+
+                        from_list.append($('<option>').val(value).append(visible_value));
+                    }
+
+                    done();
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+function publish_group_key(group_key) {
+
+    var group_id = group_key.group_id,
+        owner_id = group_key.owner_id,
+        node_name = group_key.node_name,
+        key_use = group_key.key_use,
+        public_key_hash = group_key.public_key_hash;
+
+    if (user_keys[public_key_hash] !== undefined) {
+        // Do not allow sharing of user keys.
+        return;
+    }
+
+    var group_str = group_string(node_name, owner_id, group_id),
+
+        list_table = $('#group-key-list'),
+        key_div = document.getElementById('id_' + public_key_hash);
+
+    if (key_div === null) {
+        key_div = $('#templates').find('.group-key-row').clone();
+        key_div.find('.key-hash').text(public_key_hash);
+        key_div.attr('id', 'id_' + public_key_hash);
+        list_table.append(key_div);
+    } else {
+        key_div = $(key_div);
+    }
+
+    var group_access_span = key_div.find('.group-access'),
+        group_access_div = $('#templates').find('.group-access-div').clone(),
+        hidden_data = group_access_div.find('.data');
+
+    hidden_data.find('.node').text(node_name);
+    hidden_data.find('.owner').text(owner_id);
+    hidden_data.find('.group').text(group_id);
+
+    group_access_div.find('.group-name').text(group_str);
+    group_access_div.find('.key-use').text(key_use);
+    group_access_span.append(group_access_div);
+}
+
+function load_group_keys() {
+
+    squeakclient.local.list_group_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0;
+
+                    for ( ; i < length; i++ ) {
+                        publish_group_key(keys[i]);
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+
+function gather_selected_keys() {
+    var keys = [],
+        group_key_list = $('#group-key-list');
+
+    group_key_list.children().each(function() {
+        var row = $(this),
+            selected = row.find('.group-key-checkbox').prop('checked'),
+            key_hash = row.find('.key-hash').text(),
+            access_array = [];
+
+        if (selected) {
+            var group_access = row.find('.group-access');
+
+            group_access.children().each(function() {
+                var group_access_div = $(this),
+                    hidden_data = group_access_div.find('.data'),
+                    node_name = hidden_data.find('.node').text(),
+                    owner_id = hidden_data.find('.owner').text(),
+                    group_id = hidden_data.find('.group').text(),
+                    key_use = group_access_div.find('.key-use').text();
+                    
+                access_array[access_array.length] = [node_name, owner_id, group_id, key_use];
+            });
+
+            keys[keys.length] = [key_hash, access_array];
+        }
+    });
+
+    return keys;
+}
+
+
+function ExportPrivateKeysTransaction(key_hash_list, handlers) {
+    this.key_hash_list = key_hash_list;
+    this.key_exports = [];
+    this.handlers = handlers;
+
+    handlers.error = handlers.error || function(x) {};
+    handlers.debug = handlers.debug || function(x) {};
+    handlers.done = handlers.done || function(x) {};
+}
+
+ExportPrivateKeysTransaction.prototype.start = function() {
+    this.export_key(0);
+};
+
+ExportPrivateKeysTransaction.prototype.export_key = function(i) {
+
+    var trans = this;
+
+    if (i < trans.key_hash_list.length) {
+        var key_hash = trans.key_hash_list[i];
+
+        squeakclient.local.read_private_key(
+                {public_key_hash: key_hash,
+                 only_public_part: false,
+                 allow_private_user_key: false},
+                function(resp, textStatus) {
+                    trans.handlers.debug(resp);
+    
+                    if (resp.status === 'ok') {
+                        var key = resp.key,
+                            public_key_hash = key.public_key_hash,
+                            key_type = key.key_type,
+                            public_key = key.public_key,
+                            revoke_date = key.revoke_date,
+                            private_key = key.private_key;
+
+                        trans.key_exports[i] = [public_key_hash, key_type, public_key, revoke_date, private_key];
+
+                        trans.export_key(i + 1);
+                    } else if (resp.status === 'error') {
+                        trans.handlers.error(resp);
+                    }
+                });
+    } else {
+        trans.handlers.done(trans.key_exports);
+    }
+};
+
+
+// handlers = {done(invite_obj), empty()}
+function construct_invite_obj(handlers) {
+
+    var group_keys = gather_selected_keys(),
+        length = group_keys.length,
+        key_hash_list = [],
+        i = 0;
+
+    if (length === 0) {
+        handlers.empty();
+    } else {
+
+        for ( ; i < length; i++ ) {
+            key_hash_list[i] = group_keys[i][0];
+        }
+
+        var trans = new ExportPrivateKeysTransaction(
+                key_hash_list,
+                {
+                    debug: debug,
+                    error: handle_error,
+                    done : function(key_exports) {
+                        var invite_obj = [key_exports, group_keys];
+
+                        handlers.done(invite_obj);
+                    }
+                });
+
+        trans.start();
+    }
+}
+
+
+
+function get_from_user_key_hash() {
+    var from_user_str = $('#from-select').val();
+
+    if (from_user_str !== '') {
+        var from_user_obj = JSON.parse(from_user_str);
+
+        return from_user_obj[1];
+    } else {
+        return null;
+    }
+}
+
+function signed_mail_required(callback) {
+    var public_signature_ok = $('#public-signature-ok').prop('checked'),
+        from_user_key_hash = get_from_user_key_hash(),
+        from_user_key_passphrase = null;
+
+    $('#signed-mail-div').show();
+
+    if (public_signature_ok) {
+
+        if (from_user_key_hash === null) {
+            say('From cannot be Anonymous');
+        } else {
+            callback(from_user_key_hash, from_user_key_passphrase);
+        }
+
+    } else {
+        say('Anonymous messaging blocked. Public signature required.');
+    }
+}
+
+
+function send(message_text) {
+    var node_name = params.node,
+        to_user = params.user,
+        to_key = params.key,
+        handlers = {
+            state_changed: function(new_state) {
+                $('#send-message-state').text(new_state);
+            },
+            debug: debug,
+            error: handle_error,
+            proxy_error: handle_error,
+            blocked: function() {
+                say('Message Blocked');
+            },
+            sent: function(message_id, timestamp, message_hash, from_signature, proof_of_work) {
+                say('Message Sent: ' + message_id);
+            },
+            ask_from_sig: signed_mail_required
+        },
+        trans = new SendMessageTransaction(node_name, to_user, to_key, message_text, handlers);
+
+    trans.start();
+}
+
+
+function construct_invite() {
+    var to_node = params.node,
+        to_user = params.user,
+        to_key = params.key,
+        from_user = cookies.user_id,
+        from_user_str = $('#from-select').val(),
+        from_node = null,
+        from_key_hash = null,
+        from_key_passphrase = null,
+        message_obj = null,
+        timestamp = get_timestamp();
+
+    construct_invite_obj(
+            {
+                done: function(invite_obj) {
+
+                    if (from_user_str !== '') {
+                        var from_user_obj = JSON.parse(from_user_str);
+
+                        from_node = from_user_obj[0],
+                        from_key_hash = from_user_obj[1];
+
+                        message_obj = [
+                            ['to', to_node, to_user, to_key],
+                            ['from', from_node, from_user, from_key_hash],
+                            ['time', timestamp],
+                            ['invite', invite_obj]];
+
+                    } else {
+                        message_obj = [
+                            ['to', to_node, to_user, to_key],
+                            ['time', timestamp],
+                            ['invite', invite_obj]];
+                    }
+
+                    builder = new MessageConstructor(
+                            from_key_hash,
+                            from_key_passphrase,
+                            message_obj,
+                            {
+                                state_changed: function(new_state) {
+                                    $('#message-constructor-state').text(new_state);
+                                },
+                                debug: debug,
+                                error: handle_error,
+                                done: send
+                            });
+
+                    builder.start();
+                },
+                empty: function() {
+                    say('No keys are selected.');
+                }
+            });
+}
+
+
+window.onload = function() {
+    var node_name = params.node,
+        to_user = params.user,
+        to_key = params.key;
+
+    if (node_name !== undefined &&
+        to_user !== undefined &&
+        to_key !== undefined) {
+
+        var to_string = user_string(node_name, to_user);
+        document.title = 'Invite: ' + to_string;
+        $('.to-user').text(to_string);
+        $('.to-key').text(to_key);
+
+        $('#contact-link').attr('href', 'contact.html?' +
+                $.param({node: node_name, user: to_user, key: to_key}));
+    } else {
+        say('Bad Parameters');
+    }
+
+    $('#public-signature-ok').prop('checked', false);
+    load_from_list(load_group_keys);
+};
+
+</script>
+</head>
+<body>
+
+<div id="templates" style="display:none;">
+
+    <table>
+        <tr class="group-key-row">
+            <td>
+                <input class="group-key-checkbox" type="checkbox">
+            </td>
+            <td class="key-hash">
+            </td>
+            <td class="group-access">
+            </td>
+        </tr>
+    </table>
+
+    <div class="group-access-div">
+        <span class="data" style="display:none;">
+            <span class="node"></span>
+            <span class="owner"></span>
+            <span class="group"></span>
+        </span>
+        <span class="group-name">
+        </span>
+        <span class="key-use">
+        </span>
+    </div>
+
+</div>
+
+
+<div>
+<span>Invite</span>
+<a href="home.html">Home</a>
+<a id="contact-link" href="#">Contact</a>
+</div>
+
+<div>
+<span>To: <span class="to-user"></span> <span class="to-key"></span></span>
+</div>
+
+<div>
+<label>From:
+<select id="from-select">
+<option value="">Anonymous</option>
+<optgroup id="from-list"></optgroup>
+</select>
+</label>
+</div>
+
+<div id="signed-mail-div" style="display:none;">
+<span><span class="to-user"></span>
+does not accept anonymous mail. 
+Are you ok with publicly signing
+your encrypted message?</span><br/>
+<label>Publicly Sign Encrypted Message
+<input id="public-signature-ok" type="checkbox">
+</label>
+</div>
+
+<div>
+<span>Group Key List</span>
+<table>
+<tr>
+<td>
+<td> Key Hash
+<td> Access Granted
+</tr>
+<tbody id="group-key-list">
+</tbody>
+</table>
+</div>
+
+<div>
+<button onclick="construct_invite();">Send</button>
+</div>
+
+<div>
+<span>Message Constructor State: <span id="message-constructor-state"></span></span>
+</div>
+
+<div>
+<span>Send Message State: <span id="send-message-state"></span></span>
+</div>
+
+<div>
+<span id="message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+
+</body>
+</html>

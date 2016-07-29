@@ -1,5 +1,7 @@
+<!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
 <title>
 Account
 </title>
@@ -129,6 +131,7 @@ function load_user_account() {
                         $('#num-keys').text(user.num_keys);
 
                         $('#default-message-access').text(user.default_message_access);
+                        $('#max-message-size').val(user.max_message_size);
                         $('#last-message-time').text(user.last_message_time);
 
                         message_access_table.clear();
@@ -419,6 +422,41 @@ function delete_message_accesses() {
 }
 
 
+function set_max_message_size_say(mesg) {
+    $('#set-max-message-size-message').text(mesg);
+}
+
+function set_max_message_size() {
+
+    var node_name = params.node,
+        new_size = $('#max-message-size').val(),
+        public_key_hash = params.key,
+        passphrase = null;
+
+    squeakclient.proxy.change_max_message_size(
+            {node_name: node_name,
+             new_size: new_size,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+                    resp = resp.resp;
+
+                    if(resp.status === 'ok') {
+                        set_max_message_size_say('Max Message Size Updated');
+                    } else if (resp.status === 'error') {
+                        handle_error1(resp, set_max_message_size_say);
+                    } else {
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, set_max_message_size_say, "node key", pass_dialog, set_max_message_size);
+                } else {
+                }
+            });
+}
+
 window.onload = function() {
 
     pass_dialog = PassphraseDialog.defaultUi($('#passphrase-div'), handle_error1);
@@ -517,7 +555,9 @@ key: <span class="public-key-hash"></span>
 <span id="set-default-message-access-message" onclick="set_default_message_access_say('');"></span>
 </div>
 
-
+<li>Max Message Size: <input id="max-message-size"></input>
+  <button onclick="set_max_message_size();">Set</button>
+  <span id="set-max-message-size-message" onclick="set_max_message_size_say('');"></span>
 <li>Last Message Time: <span id="last-message-time"></span>
 <li>Groups:
   <ul id="groups-list">

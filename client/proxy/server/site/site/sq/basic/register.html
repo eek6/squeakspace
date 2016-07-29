@@ -1,5 +1,7 @@
+<!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
 <title>
 Register
 </title>
@@ -91,6 +93,7 @@ function register() {
         when_mail_exhausted = $('#when-mail-exhausted').val(),
         quota_size = $('#quota-size').val(),
         mail_quota_size = $('#mail-quota-size').val(),
+        max_message_size = $('#max-message-size').val(),
         user_class = $('#user-class').val(),
         auth_token = $('#auth-token').val();
 
@@ -103,6 +106,7 @@ function register() {
                  when_mail_exhausted: when_mail_exhausted,
                  quota_size: quota_size,
                  mail_quota_size: mail_quota_size,
+                 max_message_size: max_message_size,
                  user_class: user_class,
                  auth_token: auth_token},
 
@@ -200,6 +204,12 @@ window.onload = function() {
 </label>
 <label>Mail Quota Size:
 <input id="mail-quota-size"></input>
+</label>
+</div>
+
+<div>
+<label>Max Message Size:
+<input id="max-message-size"></input>
 </label>
 </div>
 

@@ -54,6 +54,7 @@ Alf = tp.User(
         when_mail_exhausted='block',
         quota_size=user_quota,
         mail_quota_size=mail_quota,
+        max_message_size=None,
         user_class=None,
         auth_token=None)
 
@@ -65,14 +66,22 @@ Tony = tp.User(
         when_mail_exhausted='block',
         quota_size=user_quota,
         mail_quota_size=mail_quota,
+        max_message_size=None,
         user_class=None,
         auth_token=None)
 
+resp = client.query_user(Alf.user_id)
+assert(resp['status'] == 'ok')
+assert(resp['user_exists'] == False)
 
 resp = Alf.create(client)
 assert(resp['status'] == 'ok')
 client.send_debug({'action' : 'database'})
 client.assert_integrity(True)
+
+resp = client.query_user(Alf.user_id)
+assert(resp['status'] == 'ok')
+assert(resp['user_exists'] == True)
 
 resp = Tony.create(client)
 assert(resp['status'] == 'ok')
@@ -162,9 +171,58 @@ assert(resp['reason'] == 'blocked')
 client.assert_integrity(True)
 
 
+resp = client.read_max_message_size(
+        to_user=Tony.user_id,
+        from_user=None,
+        from_key=None)
+assert(resp['status'] == 'error')
+assert(resp['reason'] == 'blocked')
+
+
 resp = client.set_message_access(Tony.user_id, None, 'allow', Tony.key) # allow anonymous mail
 assert(resp['status'] == 'ok')
 client.assert_integrity(True)
+
+
+resp = client.read_max_message_size(
+        to_user=Tony.user_id,
+        from_user=None,
+        from_key=None)
+assert(resp['status'] == 'ok')
+assert(resp['max_message_size'] == None)
+
+
+resp = client.change_max_message_size(
+        user_id=Tony.user_id,
+        new_size=1,
+        auth_key=Alf.key)
+assert(resp['status'] == 'error')
+
+resp = client.change_max_message_size(
+        user_id=Tony.user_id,
+        new_size=1,
+        auth_key=Tony.key)
+assert(resp['status'] == 'ok')
+
+
+(resp, gen) = client.send_message(
+        to_user=Tony.user_id,
+        to_user_key_hash=Tony.key.public_key_hash,
+        from_user=None,
+        from_key=None,
+        message=alf1,
+        proof_of_work_args=None)
+assert(resp['status'] == 'error')
+assert(resp['reason'] == 'message too large')
+(alf1_id, alf1_time, _, _, _) = gen
+client.assert_integrity(True)
+
+
+resp = client.change_max_message_size(
+        user_id=Tony.user_id,
+        new_size=10000000,
+        auth_key=Tony.key)
+assert(resp['status'] == 'ok')
 
 
 (resp, gen) = client.send_message(
@@ -256,6 +314,9 @@ client.assert_integrity(True)
 
 # Tony tries to check Alf's mail.
 resp = client.read_message_list(Alf.user_id,
+        to_user_key = None,
+        from_user = None,
+        from_user_key = None,
         start_time = tony1_time,
         end_time = tony2_time,
         max_records=None,
@@ -266,6 +327,9 @@ client.assert_integrity(True)
 
 
 resp = client.read_message_list(Alf.user_id,
+        to_user_key = None,
+        from_user = None,
+        from_user_key = None,
         start_time = tony1_time,
         end_time = tony2_time,
         max_records=None,
@@ -277,6 +341,9 @@ assert(len(message_list) == 2)
 client.assert_integrity(True)
 
 resp = client.read_message_list(Alf.user_id,
+        to_user_key = None,
+        from_user = None,
+        from_user_key = None,
         start_time = tony1_time,
         end_time = tony2_time,
         max_records=None,
@@ -288,6 +355,9 @@ assert(len(message_list) == 2)
 client.assert_integrity(True)
 
 resp = client.read_message_list(Alf.user_id,
+        to_user_key = None,
+        from_user = None,
+        from_user_key = None,
         start_time = tony1_time,
         end_time = tony2_time,
         max_records=1,
@@ -300,6 +370,9 @@ assert(len(message_list) == 1)
 client.assert_integrity(True)
 
 resp = client.read_message_list(Tony.user_id,
+        to_user_key = None,
+        from_user = None,
+        from_user_key = None,
         start_time = alf1_time,
         end_time = None,
         max_records=None,
@@ -311,6 +384,9 @@ assert(len(message_list) == 2)
 client.assert_integrity(True)
 
 resp = client.read_message_list(Tony.user_id,
+        to_user_key = None,
+        from_user = None,
+        from_user_key = None,
         start_time = None,
         end_time = alf2_time,
         max_records=None,
@@ -322,6 +398,9 @@ assert(len(message_list) == 2)
 client.assert_integrity(True)
 
 resp = client.read_message_list(Tony.user_id,
+        to_user_key = None,
+        from_user = None,
+        from_user_key = None,
         start_time = None,
         end_time = None,
         max_records=1,

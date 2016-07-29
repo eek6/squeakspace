@@ -13,9 +13,9 @@ import squeak_ex as ex
 def serialize_request(request):
     return json.dumps(request)
 
-# use seconds
+# use milliseconds
 def current_time():
-    return int(time.time())
+    return int(time.time() * 1000)
 
 def timestamp_fresh(timestamp, curr, acceptable_future, acceptable_delay):
     diff = curr - timestamp
@@ -69,7 +69,7 @@ def hash_function(data):
     #return 'hash' + data # debug
     hash = hashlib.sha256()
     hash.update(str(len(data)))
-    hash.update('|')
+    #hash.update('|')
     hash.update(data)
     return base64.b64encode(hash.digest())
 
@@ -254,7 +254,10 @@ class PrivateKey(PublicKey):
         self.passphrase = passphrase
 
     def assert_passphrase(self):
-        self.alg.assert_passphrase(self.private_key, self.passphrase)
+        try:
+            self.alg.assert_passphrase(self.private_key, self.passphrase)
+        except ex.SimpleBadPassphraseException:
+            raise ex.BadPassphraseException(self.public_key_hash)
 
     def decrypt(self, enc_data):
         try:

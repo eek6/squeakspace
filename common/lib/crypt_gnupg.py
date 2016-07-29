@@ -28,7 +28,7 @@ class CryptGnuPG:
     standard = "pgp"
     name = "gnupg"
 
-    def __init__(self, path_root, gpg=None, sig_file_path=None):
+    def __init__(self, path_root, gpg=None, sig_file_path=None, passphrase_test_length=5000):
         try:
             os.makedirs(path_root)
         except OSError:
@@ -39,8 +39,10 @@ class CryptGnuPG:
         if sig_file_path == None:
             sig_file_path = path_root + '/sig_file'
 
+        self.path_root = path_root
         self.gpg = gpg
         self.sig_file_path = sig_file_path
+        self.passphrase_test_length = passphrase_test_length
 
     
     def assert_single_key(self, fingerprint):
@@ -80,7 +82,71 @@ class CryptGnuPG:
         assert(temp.status == 'ok')
     
     def assert_passphrase(self, private_key, passphrase=None):
-        assert(False)
+        debug_print('assert_passphrase', private_key, passphrase)
+        key_obj = json.loads(private_key)
+        debug_print('assert_passphrase key_obj', key_obj)
+        assert(type(key_obj) == list)
+        assert(len(key_obj) == 2)
+        fingerprint = key_obj[0]
+        key_str = key_obj[1]
+        debug_print('assert_passphrase fingerprint', fingerprint)
+        debug_print('assert_passphrase key_str', key_str)
+    
+        temp = self.gpg.import_keys(key_str)
+        debug_print('assert_passphrase import_keys', temp.results)
+        assert(len(temp.results) == 2)
+        assert(temp.results[0]['status'] == 'Contains private key\n')
+        assert(temp.results[0]['fingerprint'] == fingerprint)
+        assert(temp.results[1]['status'] == 'Entirely new key\n')
+        assert(temp.results[1]['fingerprint'] == fingerprint)
+
+        try:
+    
+            temp = self.gpg.export_keys(fingerprint, secret=True)
+            debug_print('assert_passphrase export_keys', temp)
+            assert(temp == key_str)
+        
+            self.assert_single_key(fingerprint)
+
+            plain_data = os.urandom(self.passphrase_test_length)
+            debug_print('assert_passphrase plain_data', plain_data)
+
+            temp = self.gpg.encrypt(plain_data, fingerprint)
+            debug_print('assert_passphrase encrypt', temp.status, temp.ok)
+            assert(temp.ok)
+    
+            enc_data = str(temp)
+            debug_print('assert_passphrase enc_data', enc_data)
+        
+            temp = self.gpg.decrypt(enc_data, passphrase=passphrase)
+            debug_print('assert_passphrase decrypt', temp.status, temp.ok)
+            debug_print('assert_passphrase decrypt', temp)
+            if not temp.ok:
+                # Make this more robust!
+                # Actually check if the failure is due to the passphrase.
+                raise ex.SimpleBadPassphraseException()
+        
+            # TODO: Is this a problem? It tries to decode the random plaintext as ascii.
+            # dec_data = bytes(temp)
+            dec_data = temp.data
+            debug_print('assert_passphrase dec_data', dec_data)
+            if plain_data != dec_data:
+                raise ex.SimpleBadPassphraseException()
+
+            # assertion passed.
+        
+        finally:
+
+            temp = self.gpg.delete_keys(fingerprint, secret=True)
+            debug_print('assert_passphrase delete_keys(secret)', temp.status)
+            assert(temp.status == 'ok')
+        
+            temp = self.gpg.delete_keys(fingerprint)
+            debug_print('assert_passphrase delete_keys', temp.status)
+            assert(temp.status == 'ok')
+ 
+
+
     
     def encrypt(self, public_key, data):
         debug_print('encrypt', public_key, data)

@@ -111,11 +111,13 @@ class Client:
     
     # local/private-key.wsgi
     
-    def read_private_key(self, user_id, session_id, public_key_hash):
+    def read_private_key(self, user_id, session_id, public_key_hash, only_public_part=None, allow_private_user_key=None):
     
         method = 'GET'
         path = '/local/private-key?' + uc.encode(
-                {'public_key_hash' : public_key_hash})
+                {'public_key_hash' : public_key_hash,
+                 'only_public_part' : only_public_part,
+                 'allow_private_user_key' : allow_private_user_key})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
@@ -725,15 +727,27 @@ class Client:
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
-    def create_group(self, user_id, session_id, node_name, group_id, quota_allocated, when_space_exhausted, public_key_hash, passphrase=None):
+    def create_group(self, user_id, session_id, node_name, group_id,
+                     post_access, read_access, delete_access,
+                     posting_key_hash, reading_key_hash, delete_key_hash,
+                     quota_allocated, when_space_exhausted,
+                     max_post_size,
+                     public_key_hash, passphrase=None):
     
         method = 'POST'
         path = '/proxy/group'
         body = uc.encode(
                 {'node_name' : node_name,
                  'group_id' : group_id,
+                 'post_access' : post_access,
+                 'read_access' : read_access,
+                 'delete_access' : delete_access,
+                 'posting_key_hash' : posting_key_hash,
+                 'reading_key_hash' : reading_key_hash,
+                 'delete_key_hash' : delete_key_hash,
                  'quota_allocated' : quota_allocated,
                  'when_space_exhausted' : when_space_exhausted,
+                 'max_post_size' : max_post_size,
                  'public_key_hash' : public_key_hash,
                  'passphrase' : passphrase})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
@@ -786,6 +800,65 @@ class Client:
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
+
+    # proxy/max-message-size.wsgi
+
+    def read_max_message_size(self, user_id, session_id, node_name, to_user, from_user_key_hash, passphrase):
+
+        method = 'GET'
+        path = '/proxy/max-message-size?' + uc.encode(
+                {'node_name' : node_name,
+                 'to_user' : to_user,
+                 'from_user_key_hash' : from_user_key_hash,
+                 'passphrase' : passphrase})
+        cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
+ 
+
+    def change_max_message_size(self, user_id, session_id, node_name, new_size, public_key_hash, passphrase):
+
+        method = 'POST'
+        path = '/proxy/max-message-size'
+        body = uc.encode(
+                {'node_name' : node_name,
+                 'new_size' : new_size,
+                 'public_key_hash' : public_key_hash,
+                 'passphrase' : passphrase})
+        cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
+ 
+
+    # proxy/max-post-size.wsgi
+
+    def read_max_post_size(self, user_id, session_id, node_name, group_id, owner_id, passphrase):
+
+        method = 'GET'
+        path = '/proxy/max-post-size?' + uc.encode(
+                {'node_name' : node_name,
+                 'group_id' : group_id,
+                 'owner_id' : owner_id,
+                 'passphrase' : passphrase})
+        cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
+ 
+
+    def change_max_post_size(self, user_id, session_id, node_name, group_id, new_size, public_key_hash, passphrase):
+
+        method = 'POST'
+        path = '/proxy/max-post-size'
+        body = uc.encode(
+                {'node_name' : node_name,
+                 'group_id' : group_id,
+                 'new_size' : new_size,
+                 'public_key_hash' : public_key_hash,
+                 'passphrase' : passphrase})
+        cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
+
     
     # proxy/message-access.wsgi
     
@@ -831,11 +904,16 @@ class Client:
     
     # proxy/message-list.wsgi
     
-    def read_message_list(self, user_id, session_id, node_name, start_time, end_time, max_records, order, public_key_hash, passphrase=None):
+    def read_message_list(self, user_id, session_id,
+                          node_name, to_user_key, from_user, from_user_key,
+                          start_time, end_time, max_records, order, public_key_hash, passphrase=None):
     
         method = 'GET'
         path = '/proxy/message-list?' + uc.encode(
                 {'node_name' : node_name,
+                 'to_user_key' : to_user_key,
+                 'from_user' : from_user,
+                 'from_user_key' : from_user_key,
                  'start_time' : start_time,
                  'end_time' : end_time,
                  'max_records' : max_records,
@@ -903,7 +981,7 @@ class Client:
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
-    def send_message(self, user_id, session_id, node_name, to_user, to_user_key_hash, from_user_key_hash, message, passphrase=None):
+    def send_message(self, user_id, session_id, node_name, to_user, to_user_key_hash, from_user_key_hash, message, passphrase=None, force_encryption=None):
     
         method = 'POST'
         path = '/proxy/message'
@@ -913,7 +991,8 @@ class Client:
                  'to_user_key_hash' : to_user_key_hash,
                  'from_user_key_hash' : from_user_key_hash,
                  'message' : message,
-                 'passphrase' : passphrase})
+                 'passphrase' : passphrase,
+                 'force_encryption' : force_encryption})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
@@ -968,7 +1047,7 @@ class Client:
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
-    def make_post(self, user_id, session_id, node_name, group_id, owner_id, data, passphrase=None):
+    def make_post(self, user_id, session_id, node_name, group_id, owner_id, data, passphrase=None, force_encryption=None):
     
         method = 'POST'
         path = '/proxy/post'
@@ -977,7 +1056,8 @@ class Client:
                  'group_id' : group_id,
                  'owner_id' : owner_id,
                  'data' : data,
-                 'passphrase' : passphrase})
+                 'passphrase' : passphrase,
+                 'force_encryption' : force_encryption})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
@@ -1011,6 +1091,20 @@ class Client:
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
+
+
+    # proxy/query-user.wsgi
+
+
+    def query_user(self, user_id, session_id, node_name, other_user_id):
+
+        method = 'GET'
+        path = '/proxy/query-user?' + uc.encode(
+                {'node_name' : node_name,
+                 'other_user_id' : other_user_id})
+        cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
+
+        return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
     
     
     # proxy/user.wsgi
@@ -1041,6 +1135,7 @@ class Client:
     def create_user(self, user_id, session_id,
                     node_name, public_key_hash, default_message_access, when_mail_exhausted,
                     quota_size, mail_quota_size,
+                    max_message_size,
                     user_class, auth_token):
     
         method = 'POST'
@@ -1052,11 +1147,25 @@ class Client:
                  'when_mail_exhausted' : when_mail_exhausted,
                  'quota_size' : quota_size,
                  'mail_quota_size' : mail_quota_size,
+                 'max_message_size' : max_message_size,
                  'user_class' : user_class,
                  'auth_token' : auth_token})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
+    
+
+    # proxy/quota-available.wsgi
+    
+    def read_quota_available(self, user_id, session_id, node_name, user_class):
+    
+        method = 'GET'
+        path = '/proxy/quota-available?' + uc.encode(
+                {'node_name' : node_name,
+                 'user_class' : user_class})
+        cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
+    
+        return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]
     
     
     # proxy/version.wsgi

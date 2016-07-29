@@ -33,14 +33,15 @@ default_mail_access = 'allow'
 when_mail_exhausted = 'block'
 quota_size = 100*1024*1024
 mail_quota_size = 10*1024*1024
+max_message_size = None
 user_class = None
 auth_token = None
-
 
 resp = client.create_user(
         user_id, user_key, revoke_date,
         default_mail_access, when_mail_exhausted,
         quota_size, mail_quota_size,
+        max_message_size,
         user_class, auth_token)
 assert(resp['status'] == 'ok')
 

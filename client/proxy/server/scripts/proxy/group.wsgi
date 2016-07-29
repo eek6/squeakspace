@@ -14,8 +14,15 @@ def post_handler(environ):
 
     node_name = ht.get_required(query, 'node_name')
     group_id = ht.get_required(query, 'group_id')
+    post_access = ht.get_required(query, 'post_access')
+    read_access = ht.get_required(query, 'read_access')
+    delete_access = ht.get_required(query, 'delete_access')
+    posting_key_hash = ht.get_optional(query, 'posting_key_hash')
+    reading_key_hash = ht.get_optional(query, 'reading_key_hash')
+    delete_key_hash = ht.get_optional(query, 'delete_key_hash')
     quota_allocated = ht.convert_int(ht.get_required(query, 'quota_allocated'), 'quota_allocated')
     when_space_exhausted = ht.get_required(query, 'when_space_exhausted')
+    max_post_size = ht.convert_int(ht.get_optional(query, 'max_post_size'), 'max_post_size')
     public_key_hash = ht.get_required(query, 'public_key_hash')
     passphrase = ht.get_optional(query, 'passphrase')
 
@@ -24,7 +31,10 @@ def post_handler(environ):
         c = db.cursor(conn)
         resp = db.create_group(c, user_id, session_id,
                                node_name, group_id,
+                               post_access, read_access, delete_access,
+                               posting_key_hash, reading_key_hash, delete_key_hash,
                                quota_allocated, when_space_exhausted,
+                               max_post_size,
                                public_key_hash, passphrase)
         db.commit(conn)
 

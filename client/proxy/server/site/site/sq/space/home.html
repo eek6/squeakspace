@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>
+Home
+</title>
+
+<link rel="stylesheet" type="text/css" href="all.css">
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/cookielib-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/space/site-util.js"></script>
+<script type="text/javascript">
+
+params = querystring.load();
+cookies = cookielib.parse(document.cookie);
+
+function say(mesg) {
+    $('#message').text(mesg);
+}
+
+
+function handle_error(resp) {
+    if (resp.reason === 'bad session id' ||
+        resp.reason === 'cookie required') {
+        window.location = 'login.html';
+    } else {
+        say(resp.reason);
+    }
+}
+
+
+function get_or_insert(table, key, default_value) {
+    var value = table[key];
+
+    if (value === undefined) {
+        table[key] = default_value;
+        return default_value;
+    } else {
+        return value;
+    }
+}
+
+function load_groups(done) {
+    var groups_div = $('#groups-div');
+
+    // There should be a contact book for groups.
+    // Users are taken care of because they always have keys,
+    // but some groups might have public access and have no
+    // authorization keys.
+    squeakclient.local.list_group_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0,
+                        table = {};
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i],
+                            node_name = key.node_name,
+                            owner_id = key.owner_id,
+                            group_id = key.group_id,
+                            use = key.use,
+                            node_value = get_or_insert(table, node_name, {}),
+                            owner_value = get_or_insert(node_value, owner_id, {}),
+                            group_value = get_or_insert(owner_value, group_id, {});
+
+                        group_value[use] = true;
+                    }
+
+                    for (var node_name in table) {
+                        var node_value = table[node_name];
+
+                        for (var owner_id in node_value) {
+                            var group_value = node_value[owner_id];
+
+                            for (var group_id in group_value) {
+                                var visible_link = group_string(node_name, owner_id, group_id),
+                                    links_params = {node: node_name,
+                                                    owner: owner_id,
+                                                    group: group_id};
+                                    actual_link = 'group.html?' + $.param(links_params),
+                                    html_div = $('#templates').find('.group-link-div').clone(),
+                                    html_link = html_div.find('.group-link');
+
+                                html_link.append(visible_link)
+                                         .attr('href', actual_link);
+
+                                groups_div.append(html_div);
+                            }
+                        }
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+function load_contacts() {
+    var contacts_table = $('#contacts-table');
+
+    squeakclient.local.list_other_user_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0,
+                        table = {};
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i],
+                            user_id = key.user_id,
+                            node_name = key.node_name,
+                            public_key_hash = key.public_key_hash,
+                            trust_score = key.trust_score,
+                            visible_url = user_string(node_name, user_id),
+                            url_params = {node: node_name, user: user_id, key: public_key_hash},
+                            actual_url = 'contact.html?' + $.param(url_params),
+                            export_link = 'export-contact.html?' + $.param(url_params),
+                            contact_row = $('#templates').find('.contact-row').clone();
+
+                        contact_row.find('.contact-link').attr('href', actual_url)
+                                                         .append(visible_url);
+                        contact_row.find('.public-key-hash-td').append(public_key_hash);
+                        contact_row.find('.trust-score-td').append(trust_score);
+                        contact_row.find('.export-link').attr('href', export_link);
+
+                        contacts_table.append(contact_row);
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+function load_accounts() {
+    var accounts_table = $('#accounts-table'),
+        user_id = cookies.user_id;
+
+    squeakclient.local.list_user_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0;
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i],
+                            node_name = key.node_name,
+                            public_key_hash = key.public_key_hash,
+                            visible_url = user_string(node_name, user_id),
+                            url_params = {node: node_name, key: public_key_hash},
+                            actual_url = 'inbox.html?' + $.param(url_params),
+                            account_url = 'account.html?' + $.param(url_params),
+                            export_url = 'export-self.html?' + $.param(url_params),
+                            account_row = $('#templates').find('.account-row').clone();
+
+                        account_row.find('.inbox-link').attr('href', actual_url)
+                                                        .append(visible_url);
+                        account_row.find('.public-key-hash-td').append(public_key_hash);
+                        account_row.find('.account-link').attr('href', account_url);
+                        account_row.find('.export-link').attr('href', export_url);
+
+                        accounts_table.append(account_row);
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+
+function sign_out() {
+    squeakclient.local.sign_out(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    window.location = 'login.html';
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+function delete_button(button) {
+    var confirm_div = button.next();
+
+    confirm_div.show();
+}
+
+function delete_cancel(button) {
+    var confirm_div = button.parent().parent();
+
+    confirm_div.hide();
+}
+
+function DeleteAccountTransaction() {
+    this.accounts_table = {};
+    this.accounts = [];
+}
+
+DeleteAccountTransaction.prototype.start = function() {
+    this.collect_accounts();
+};
+
+DeleteAccountTransaction.prototype.collect_accounts = function() {
+    var trans = this;
+
+    squeakclient.local.list_user_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        i = 0,
+                        length = keys.length;
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i],
+                            node_name = key.node_name,
+                            public_key_hash = key.public_key_hash;
+
+                        trans.accounts_table[node_name] = public_key_hash;
+                    }
+
+                    for ( node_name in trans.accounts_table ) {
+                        var public_key_hash = trans.accounts_table[node_name];
+
+                        trans.accounts.push([node_name, public_key_hash]);
+                    }
+
+                    trans.delete_accounts();
+                        
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+};
+
+DeleteAccountTransaction.prototype.delete_accounts = function() {
+    this.delete_step(0);
+};
+
+DeleteAccountTransaction.prototype.delete_step = function(i) {
+    var trans = this;
+
+    if (i < trans.accounts.length) {
+        var account = trans.accounts[i],
+            node_name = account[0],
+            public_key_hash = account[1];
+
+        squeakclient.proxy.delete_user(
+                {node_name: node_name,
+                 public_key_hash: public_key_hash},
+                function(resp, textStatus) {
+                    debug(resp);
+
+                    if (resp.status === 'ok') {
+                        var proxy_resp = resp.resp;
+
+                        if (proxy_resp.status === 'ok') {
+                            trans.delete_step(i + 1);
+                        } else if (proxy_resp.status === 'error') {
+                            handle_error(proxy_resp);
+                        }
+
+                    } else if (resp.status === 'error') {
+                        handle_error(resp);
+                    }
+                });
+    } else {
+        trans.delete_local_account();
+    }
+};
+
+DeleteAccountTransaction.prototype.delete_local_account = function() {
+    delete_local_account();
+};
+
+
+function delete_account() {
+    var trans = new DeleteAccountTransaction();
+
+    trans.start();
+}
+
+function delete_local_account() {
+
+    squeakclient.local.delete_user(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    window.location = 'login.html';
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+window.onload = function() {
+    load_groups();
+    load_contacts();
+    load_accounts();
+}
+
+</script>
+</head>
+<body>
+
+<div id="templates" style="display:none;">
+
+
+<div class="group-link-div">
+    <a class="group-link"></a>
+</div>
+
+<table>
+    <tr class="contact-row">
+        <td class="contact-link-td">
+            <a class="contact-link"></a>
+        </td>
+        <td class="public-key-hash-td"></td>
+        <td class="trust-score-td"></td>
+        <td class="export-td">
+            <a href="#" class="export-link">Export</a>
+        </td>
+    </tr>
+
+    <tr class="account-row">
+        <td class="inbox-link-div">
+            <a class="inbox-link"></a>
+        </td>
+        <td class="public-key-hash-td"></td>
+        <td class="account-link-td">
+            <a href="#" class="account-link">Account</a>
+        </td>
+        <td class="export-link-td">
+            <a href="#" class="export-link">Export</a>
+        </td>
+    </tr>
+</table>
+
+
+</div>
+
+<div>
+<span>Home</span>
+<a href="#" onclick="sign_out();">Sign Out</a>
+</div>
+
+<div>
+Groups
+<div id="groups-div">
+</div>
+</div>
+
+<div>
+Contacts
+<table>
+<tbody>
+<tr>
+<td>User
+<td>Public Key Hash
+<td>Trust Level
+<td>
+</tr>
+</tbody>
+<tbody id="contacts-table">
+</tbody>
+</table>
+</div>
+
+<div>
+Accounts
+<table>
+<tbody>
+<tr>
+<td>Inbox
+<td>Public Key Hash
+<td>
+</tr>
+</tbody>
+<tbody id="accounts-table">
+</tbody>
+</table>
+</div>
+
+<div>
+<a href="import-contact.html">Import Contact</a>
+</div>
+
+<div id="delete-div">
+    <a href="#delete-div" onclick="delete_button($(this));">Delete All Accounts</a>
+    <div class="confirm-div" style="display:none;">
+        Are you sure you want to delete your account?
+        Everything will be deleted. This action cannot be undone.
+        <div>
+            <button onclick="delete_account();">Yes</button>
+            <button onclick="delete_cancel($(this));">No</button>
+        </div>
+    </div>
+</div>
+
+<div id="delete-local-div">
+    <a href="#delete-local-div" onclick="delete_button($(this));">Delete Local Account</a>
+    <div class="confirm-div" style="display:none;">
+        Are you sure you want to delete your account on this machine?
+        The keys stored on this machine will be erased.
+        You should only take this action if you can access your account
+        from another device and no longer wish to use this device.
+        If this is the only device you can access your account with,
+        you will not be able to access or delete your account in the network
+        after deleting this local account.
+        <div>
+            <button onclick="delete_local_account();">Yes</button>
+            <button onclick="delete_cancel($(this));">No</button>
+        </div>
+    </div>
+</div>
+
+
+
+<div>
+<span id="message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+
+</body>
+</html>

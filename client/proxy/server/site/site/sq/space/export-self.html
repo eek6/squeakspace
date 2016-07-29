@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>
+Export Self
+</title>
+
+<link rel="stylesheet" type="text/css" href="all.css">
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/cookielib-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/space/site-util.js"></script>
+<script type="text/javascript">
+
+params = querystring.load();
+cookies = cookielib.parse(document.cookie);
+
+function say(mesg) {
+    $('#message').text(mesg);
+}
+
+function handle_error(resp) {
+    if (resp.reason === 'bad session id' ||
+        resp.reason === 'cookie required') {
+        window.location = 'login.html';
+    } else {
+        say(resp.reason);
+    }
+}
+
+
+// handlers = {debug: ..., error: ..., state_changed: ..., done: ...}
+ExportSelfTransaction = function(node_name, user_id, public_key_hash, handlers) {
+    this.node_name = node_name;
+    this.user_id = user_id;
+    this.public_key_hash = public_key_hash;
+
+    this.handlers = handlers;
+    handlers.debug = handlers.debug || function(x) {};
+    handlers.error = handlers.error || function(resp) {};
+    handlers.state_changed = handlers.state_changed || function(x) {};
+    handlers.done = handlers.done || function(x) {};
+
+    this.state = null;
+    this.real_node_name = null;
+    this.node_url = null;
+    this.key_type = null;
+    this.public_key = null;
+    this.revoke_date = null;
+};
+
+ExportSelfTransaction.prototype.change_state = function(new_state) {
+    this.state = new_state;
+    this.handlers.state_changed(new_state);
+};
+
+ExportSelfTransaction.prototype.start = function() {
+    this.change_state('start');
+    this.read_node_addr();
+};
+
+ExportSelfTransaction.prototype.read_node_addr = function() {
+    var trans = this;
+
+    trans.change_state('read_node_addr');
+
+    squeakclient.local.read_node_addr(
+            {node_name: trans.node_name},
+            function(resp, textStatus) {
+                trans.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    var addr = resp.addr;
+
+                    trans.real_node_name = addr.real_node_name;
+                    trans.node_url = addr.url;
+
+                    trans.read_public_part_of_key();
+                } else if (resp.status === 'error') {
+                    trans.handlers.error(resp);
+                }
+            });
+};
+
+ExportSelfTransaction.prototype.read_public_part_of_key = function() {
+    var trans = this;
+
+    trans.change_state('read_public_part_of_key');
+
+    squeakclient.local.read_private_key(
+            {public_key_hash: trans.public_key_hash,
+             only_public_part: true},
+            function(resp, textStatus) {
+                trans.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    var key = resp.key;
+
+                    trans.key_type = key.key_type;
+                    trans.public_key = key.public_key;
+                    trans.revoke_date = key.revoke_date;
+
+                    trans.done();
+                } else if (resp.status === 'error') {
+                    trans.handlers.error(resp);
+                }
+            });
+};
+
+ExportSelfTransaction.prototype.done = function() {
+    this.change_state('done');
+    this.handlers.done(
+            {type: 'contact_export',
+             user_id: this.user_id,
+             node: {node_name: this.node_name,
+                    url: this.node_url,
+                    real_node_name: this.real_node_name},
+             key: {public_key_hash: this.public_key_hash,
+                   key_type: this.key_type,
+                   public_key: this.public_key,
+                   revoke_date: this.revoke_date}});
+};
+
+
+
+
+
+function export_paste() {
+
+    var node_name = params.node,
+        user_id = cookies.user_id,
+        public_key_hash = params.key,
+        done = function(export_obj) {
+            $('#export-paste').val(JSON.stringify(export_obj));
+            say('Exported');
+        },
+        trans = new ExportSelfTransaction(
+                node_name, user_id, public_key_hash,
+                {debug: debug,
+                 error: handle_error,
+                 done: done});
+
+    trans.start();
+}
+
+function save_export() {
+    alert('save_export not implemented');
+}
+
+window.onload = function() {
+    export_paste();
+
+    $('#node-name').text(params.node);
+    $('#user-id').text(cookies.user_id);
+    $('#key').text(params.key);
+};
+
+</script>
+</head>
+<body>
+
+<div>
+<span>Export Self</span>
+<a href="home.html">Home</a>
+</div>
+
+<div>
+<span>Node: <span id="node-name"></span></span><br/>
+<span>User: <span id="user-id"></span></span><br/>
+<span>Key: <span id="key"></span></span><br/>
+</div>
+
+<div>
+<label>Export Paste:<br/>
+<textarea id="export-paste" readonly="true"></textarea>
+</label>
+<!--
+<button onclick="save_export();">Save As File</button>
+ -->
+</div>
+
+<div>
+<span id="message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

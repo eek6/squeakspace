@@ -1,5 +1,7 @@
+<!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
 <title>
 Key Management
 </title>
@@ -267,10 +269,13 @@ function delete_private_key() {
 }
 
 function export_private_key() {
-    var key_hash = $('#private-keys').val();
+    var key_hash = $('#private-keys').val(),
+        allow_private_user_key = $('#allow-user-key-export').prop('checked');
 
     squeakclient.local.read_private_key(
-            {public_key_hash: key_hash},
+            {public_key_hash: key_hash,
+             only_public_part: false,
+             allow_private_user_key: allow_private_user_key},
             function(resp, textStatus) {
                 debug(JSON.stringify(resp));
 
@@ -300,6 +305,12 @@ function export_private_key() {
                 } else {
                 }
             });
+}
+
+function allow_user_key_export_warning() {
+    if ($('#allow-user-key-export').prop('checked')) {
+        private_key_say("Warning: If someone obtains your user key, they'll be able to take control of your account.");
+    }
 }
 
 function add_user_key() {
@@ -707,10 +718,13 @@ Import
 <span onclick="toggle_next(this);">Private Keys</span>
 <div id="private-keys-div" style="display:none;">
 <select id="private-keys" size="10">
-</select>
+</select><br/>
 <button onclick="delete_private_key();">Delete</button>
 <button onclick="export_private_key();">Export</button>
 <span id="private-key-message" onclick="private_key_say('');"></span><br/>
+<label>Allow Exporting Private User Keys:
+<input id="allow-user-key-export" type="checkbox" onclick="allow_user_key_export_warning();">
+</label>
 
 <ul>
 

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>
+Export
+</title>
+
+<link rel="stylesheet" type="text/css" href="all.css">
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/space/site-util.js"></script>
+<script type="text/javascript">
+
+
+params = querystring.load();
+
+function say(mesg) {
+    $('#message').text(mesg);
+}
+
+function handle_error(resp) {
+    if (resp.reason === 'bad session id' ||
+        resp.reason === 'cookie required') {
+        window.location = 'login.html';
+    } else {
+        say(resp.reason);
+    }
+}
+
+// handlers = {state_changed(new_state), error(resp), debug(str), done(obj)}
+ExportContactTransaction = function(node_name, user_id, public_key_hash, handlers) {
+    this.node_name = node_name;
+    this.user_id = user_id;
+    this.public_key_hash = public_key_hash;
+
+    this.handlers = handlers;
+    handlers.state_changed = handlers.state_changed || function(x) {};
+    handlers.error = handlers.error || function(x) {};
+    handlers.debug = handlers.debug || function(x) {};
+
+    this.state = null;
+
+    this.node_url = null;
+    this.real_node_name = null;
+    this.key_type = null;
+    this.public_key = null;
+    this.revoke_date = null;
+    this.trust_level = null; // Loaded, but not used at this time.
+};
+
+ExportContactTransaction.prototype.change_state = function(new_state) {
+    this.state = new_state;
+    this.handlers.state_changed(new_state);
+};
+
+ExportContactTransaction.prototype.start = function() {
+    this.change_state('start');
+    this.load_node_addr();
+};
+
+ExportContactTransaction.prototype.load_node_addr = function() {
+    var trans = this;
+
+    trans.change_state('load_node_addr');
+
+    squeakclient.local.read_node_addr(
+            {node_name: trans.node_name},
+            function(resp, textStatus) {
+                trans.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    var addr = resp.addr;
+
+                    trans.real_node_name = addr.real_node_name;
+                    trans.node_url = addr.url;
+
+                    trans.load_trust_level();
+                } else if (resp.status === 'error') {
+                    trans.handlers.error(resp);
+                }
+            });
+};
+
+ExportContactTransaction.prototype.load_trust_level = function() {
+    var trans = this;
+
+    trans.change_state('load_trust_level');
+
+    squeakclient.local.read_other_user_key(
+            {other_user_id: trans.user_id,
+             node_name: trans.node_name,
+             public_key_hash: trans.public_key_hash},
+            function(resp, textStatus) {
+                trans.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    trans.trust_score = resp.key.trust_score;
+                    trans.load_public_key();
+                } else if (resp.status === 'error') {
+                    trans.handlers.error(resp);
+                }
+            });
+};
+
+ExportContactTransaction.prototype.load_public_key = function() {
+    var trans = this;
+
+    trans.change_state('load_public_key');
+
+    squeakclient.local.read_public_key(
+            {public_key_hash: trans.public_key_hash},
+            function(resp, textStatus) {
+                trans.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    var key = resp.key;
+
+                    trans.key_type = key.key_type;
+                    trans.public_key = key.public_key;
+                    trans.revoke_date = key.revoke_date;
+
+                    trans.done();
+                } else if (resp.status === 'error') {
+                    trans.handlers.error(resp);
+                }
+            });
+
+
+};
+
+ExportContactTransaction.prototype.done = function() {
+    this.change_state('done');
+    this.handlers.done({type: 'contact_export',
+                        user_id: this.user_id,
+                        node: {node_name: this.node_name,
+                               url: this.node_url,
+                               real_node_name: this.real_node_name},
+                        key: {public_key_hash: this.public_key_hash,
+                              key_type: this.key_type,
+                              public_key: this.public_key,
+                              revoke_date: this.revoke_date}});
+};
+
+
+
+function export_paste() {
+    var node_name = params.node,
+        user_id = params.user,
+        public_key_hash = params.key,
+        handlers = {
+            state_changed: function(new_state) {
+                $('#export-state').text(new_state);
+            },
+            error: handle_error,
+            debug: debug,
+            done: function(export_obj) {
+                $('#export-paste').val(JSON.stringify(export_obj));
+                say('Exported');
+            }
+        },
+        trans = new ExportContactTransaction(node_name, user_id, public_key_hash, handlers);
+
+    trans.start();
+}
+
+function save_export() {
+    alert('save_export not implemented');
+}
+
+window.onload = function() {
+    var node_name = params.node,
+        user_id = params.user,
+        public_key_hash = params.key,
+        user_str = user_string(node_name, user_id);
+
+    document.title = 'Export ' + user_str;
+    $('#node-name').text(node_name);
+    $('#user-id').text(user_id);
+    $('#key').text(public_key_hash);
+
+    export_paste();
+};
+
+</script>
+</head>
+<body>
+
+<div>
+<span>Export Contact</span>
+<a href="home.html">Home</a>
+</div>
+
+<div>
+<span>Node: <span id="node-name"></span></span><br/>
+<span>User: <span id="user-id"></span></span><br/>
+<span>Key: <span id="key"></span></span><br/>
+</div>
+
+<div>
+<label>Export Paste:<br/>
+<textarea id="export-paste" readonly="true"></textarea>
+</label>
+<!--
+<button onclick="save_export();">Save As File</button>
+ -->
+</div>
+
+
+<div>
+Export State: <span id="export-state"></span>
+</div>
+
+<div>
+<span id="message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

@@ -21,8 +21,6 @@ def close(conn):
 root_quota_id = 1
 
 
-
-
 def assert_timestamp_fresh(timestamp, argument):
     ut.assert_timestamp_fresh(
             timestamp, argument,
@@ -38,24 +36,30 @@ def make_db(c, total_quota):
                   public_key_hash TEXT,
                   revoke_date INTEGER,
                   trust_score INTEGER,
-                  download_source TEXT)''')
+                  download_source TEXT,
+                  PRIMARY KEY(public_key_hash))''')
 
     # This is where the node stores its keys.
     # Move this to a different database.
+    # UNUSED
     c.execute('''CREATE TABLE priv_keys
                  (identity TEXT,
                   identity_type TEXT,
                   public_key_hash TEXT,
                   public_key TEXT,
-                  private_key TEXT)''')
+                  private_key TEXT,
+                  PRIMARY KEY(public_key_hash))''')
 
+    # UNUSED
     c.execute('''CREATE TABLE enc_priv_keys
                  (public_key_hash TEXT,
                   enc_priv_key TEXT,
                   parameters TEXT,
                   signature TEXT, -- signs enc_priv_key, parameters
-                  download_source)''')
+                  download_source TEXT,
+                  PRIMARY KEY(public_key_hash))''')
 
+    # UNUSED
     c.execute('''CREATE TABLE certificates
                  (owner TEXT,
                   owner_type TEXT, -- user, node
@@ -65,24 +69,25 @@ def make_db(c, total_quota):
                   signature TEXT,
                   download_source TEXT)''')
 
+    # UNUSED
     c.execute('''CREATE TABLE hosts
                  (identity TEXT,
                   public_key_hash TEXT,
                   num_keys INTEGER,
                   connections_text TEXT,
                   connections_sig TEXT,
-                  download_source TEXT)''')
+                  download_source TEXT,
+                  PRIMARY KEY(identity))''')
 
+    # UNUSED
     c.execute('''CREATE TABLE connections
                  (host TEXT,
                   publication_stamp INTEGER, -- timestamp of publication 
                   revocation_date INTEGER, -- time to revoke.
                   protocol TEXT,
                   address TEXT,
-                  download_source TEXT)''')
-    # Should there be information about the reliability of each
-    # connection here? I'm not planning on having the hosts
-    # send very much between each other....
+                  download_source TEXT,
+                  PRIMARY KEY(host))''')
 
     # rowid is used here.
     c.execute('''CREATE TABLE storage_quotas
@@ -103,14 +108,18 @@ def make_db(c, total_quota):
                   mail_quota_id INTEGER,
                   num_keys INTEGER,
                   default_message_access TEXT, -- overriden by message_access_list. allow, block, proof_of_work/{algorithm=...,...}
+                  max_message_size INTEGER,
                   last_message_time INTEGER,
-                  douwnload_source TEXT)''')
+                  last_timestamp INTEGER,
+                  douwnload_source TEXT,
+                  PRIMARY KEY(user_id))''')
 
     # proof_of_work has a query string or parameters, specifying the algorithm and parameters for the algorithm.
     c.execute('''CREATE TABLE message_access
                  (user_id TEXT,
                   from_key_hash TEXT,
-                  access TEXT) -- allow, block, proof_of_work/{algorithm=...,...}''')
+                  access TEXT, -- allow, block, proof_of_work/{algorithm=...,...}
+                  PRIMARY KEY(user_id, from_key_hash))''')
 
     c.execute('''CREATE TABLE messages
                  (message_id TEXT, -- hash(json['SEND_MESSAGE', timestamp, to_user, to_user_key, from_user, from_user_key, message_hash])
@@ -119,11 +128,12 @@ def make_db(c, total_quota):
                   to_user_key TEXT, -- OR NULL, matches keys.public_key_hash. key belongs to user.
                   from_user TEXT, -- OR NULL, matches users.user_id
                   from_user_key TEXT, -- OR NULL, matches keys.public_key_hash
-                  message TEXT,
+                  message BLOB,
                   message_hash TEXT,
                   from_signature TEXT, -- signs message_id
                   proof_of_work TEXT, -- applied to message_id
-                  download_source TEXT)''')
+                  download_source TEXT,
+                  PRIMARY KEY(to_user, message_id))''')
 
     c.execute('''CREATE TABLE groups
                  (group_id TEXT,
@@ -138,7 +148,9 @@ def make_db(c, total_quota):
                   delete_key_type TEXT,
                   delete_pub_key TEXT, 
                   quota_id INTEGER,
-                  last_post_time INTEGER)''')
+                  max_post_size INTEGER,
+                  last_post_time INTEGER,
+                  PRIMARY KEY(group_id, owner_id))''')
 
     # group access will probably just be managed by sharing keys
     # instead of having whitelists for identities.
@@ -153,12 +165,14 @@ def make_db(c, total_quota):
                   timestamp INTEGER,
                   group_id TEXT,
                   owner_id TEXT,
-                  data TEXT,
+                  data BLOB,
                   data_hash TEXT,
                   post_signature TEXT, -- signs post_id
                   proof_of_work TEXT,
-                  download_source TEXT)''')
+                  download_source TEXT,
+                  PRIMARY KEY(post_id, group_id, owner_id))''')
 
+    # UNUSED
     c.execute('''CREATE TABLE storage_reports
                  (host TEXT,
                   publication_stamp INTEGER,
@@ -167,6 +181,7 @@ def make_db(c, total_quota):
                   signature TEXT,
                   download_source TEXT)''')
 
+    # UNUSED
     c.execute('''CREATE TABLE complaints
                  (complaint_id TEXT,
                   complainer_id TEXT,
@@ -179,10 +194,34 @@ def make_db(c, total_quota):
                   download_source TEXT)''')
 
 
+def assert_and_update_user_timestamp(c, user_id, last_timestamp, timestamp):
+
+    if last_timestamp != None and timestamp <= last_timestamp:
+        raise ex.OutOfOrderTimeStampException(timestamp, last_timestamp)
+
+    c.execute('UPDATE users SET last_timestamp=? WHERE user_id=?', (timestamp, user_id))
+
+
+def assert_and_update_user_timestamp2(c, user_id, timestamp):
+
+    c.execute('SELECT last_timestamp FROM users WHERE user_id=?', (user_id,))
+    user_row = c.fetchone()
+
+    if user_row == None:
+        raise ex.UnknownUserException(user_id, 'user_id')
+
+    (last_timestamp,) = user_row
+
+    assert_and_update_user_timestamp(c, user_id, last_timestamp, timestamp)
+
+
+
+
+
 ## keys.
 
 def import_key(c, identity, identity_type, key_type, public_key, public_key_hash, revoke_date, trust_score, download_source):
-    c.execute('''INSERT INTO keys
+    c.execute('''INSERT OR REPLACE INTO keys
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
                  (identity,
                   identity_type,
@@ -336,15 +375,26 @@ def change_quota_used(c, rowid, new_used):
 # Trys to increment the quota. 
 # On failure raises a QuotaExceededException.
 # TODO: optimize to a single sql query.
-def try_increment_quota(c, rowid, size):
+def try_increment_quota(c, rowid, size, deleter=None):
     row = load_quota(c, rowid)
     assert(row != None)
     (quota_allocated, quota_used, when_space_exhausted, parent_quota) = row
     new_used = quota_used + size
+
+    if when_space_exhausted == 'free_oldest' and \
+       size <= quota_allocated and \
+       deleter != None:
+
+        while new_used > quota_allocated and deleter.delete_oldest():
+            row = load_quota(c, rowid)
+            assert(row != None)
+            (quota_allocated, quota_used, when_space_exhausted, parent_quota) = row
+            new_used = quota_used + size
+
     if new_used > quota_allocated:
         raise ex.QuotaExceededException(rowid, quota_allocated, quota_used, size, when_space_exhausted)
-    else:
-        change_quota_used(c, rowid, new_used)
+
+    change_quota_used(c, rowid, new_used)
 
 def decrease_quota(c, rowid, size):
     c.execute('''UPDATE storage_quotas
@@ -373,8 +423,7 @@ def try_shrink_quota(c, rowid, parent_quota, quota_allocated, quota_used, new_qu
 
     decrease = quota_allocated - new_quota
 
-    c.execute('UPDATE storage_quotas SET quota_allocated=? WHERE rowid=?',
-              (new_quota, rowid))
+    c.execute('UPDATE storage_quotas SET quota_allocated=? WHERE rowid=?', (new_quota, rowid))
     decrease_quota(c, parent_quota, decrease)
 
 def resize_subquota(c, rowid, new_quota):
@@ -419,16 +468,18 @@ def remove_quota(c, rowid):
 
 def add_user_raw(c, row):
     (user_id, default_key_hash, user_quota_id, mail_quota_id,
-     num_keys, default_message_access, last_message_time, download_source) = row
+     num_keys, default_message_access, max_message_size, last_message_time, last_timestamp, download_source) = row
     c.execute('''INSERT INTO users
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                  (user_id,
                   default_key_hash,
                   user_quota_id,
                   mail_quota_id,
                   num_keys,
                   default_message_access,
+                  max_message_size,
                   last_message_time,
+                  last_timestamp,
                   download_source))
 
 def load_user(c, user_id):
@@ -443,13 +494,13 @@ def remove_user_keys(c, user_id):
                  WHERE identity=? AND identity_type="user"''',
                  (user_id,))
 
-def remove_user(c, user_id):
+def remove_user(c, c2, user_id):
     remove_user_keys(c, user_id) # should keys be removed? what about the web of trust?
     remove_message_accesses(c, user_id)
     remove_messages_to_user(c, user_id)
 
     for (group_id,) in c.execute('''SELECT group_id FROM groups WHERE owner_id=?''', (user_id,)):
-        remove_group(c, group_id, user_id)
+        remove_group(c2, group_id, user_id)
 
     c.execute('''SELECT user_quota_id, mail_quota_id FROM users WHERE user_id=? LIMIT 1''', (user_id,))
     (user_quota_id, mail_quota_id) = c.fetchone()
@@ -458,10 +509,25 @@ def remove_user(c, user_id):
     remove_user_raw(c, user_id)
 
 
+def get_quota_available(node_name, user_class):
+    ut.assert_node_name(node_name, config.node_name)
+
+    return config.max_user_quota
+
+
+def query_user(c, node_name, user_id):
+    ut.assert_node_name(node_name, config.node_name)
+
+    c.execute('SELECT user_id FROM users WHERE user_id=?', (user_id,))
+    row = c.fetchone()
+
+    return (row != None)
+
+
 def create_user(c, node_name, user_id, key_type,
                 public_key, public_key_hash, revoke_date,
                 default_message_access, when_mail_exhausted,
-                parent_quota, quota_size, mail_quota_size):
+                parent_quota, quota_size, mail_quota_size, max_message_size):
 
     finished = False
 
@@ -492,16 +558,24 @@ def create_user(c, node_name, user_id, key_type,
     if load_key(c, public_key_hash) != None:
         raise ex.KeyHashExistsException(public_key_hash, 'public_key_hash')
 
+    if quota_size > config.max_user_quota:
+        raise ex.UserQuotaTooLargeException(quota_size, config.max_user_quota)
+
     user_quota = try_create_sub_quota(c, parent_quota, quota_size, "block")
 
     try:
         mail_quota = try_create_sub_quota(c, user_quota, mail_quota_size, when_mail_exhausted)
 
         try:
-            row = (user_id, public_key_hash, user_quota, mail_quota, 1, default_message_access, None, None)
+            row = (user_id, public_key_hash, user_quota, mail_quota, 1, default_message_access, max_message_size, None, None, None)
             size = data_size(row)
             try_increment_quota(c, user_quota, size)
-            add_user_raw(c, row)
+
+            try:
+                add_user_raw(c, row)
+            except sqlite3.IntegrityError as e:
+                raise ex.UserNameTakenException(user_id)
+
             import_key(c, user_id, "user", key_type, public_key, public_key_hash, revoke_date, trust_score, None)
             finished = True
 
@@ -524,17 +598,18 @@ def read_user(c, timestamp, node_name, user_id, public_key_hash, signature):
 
     user_row = load_user(c, user_id)
     if user_row == None:
-        # Something's wrong with the database...
         raise ex.UnknownUserException(user_id, 'user_id')
 
     (user_id, default_key_hash, user_quota_id, mail_quota_id, \
-     num_keys, default_message_access, last_message_time, download_source) = user_row
+     num_keys, default_message_access, max_message_size, last_message_time, last_timestamp, download_source) = user_row
+
+    assert_and_update_user_timestamp(c, user_id, last_timestamp, timestamp)
 
     user_quota_obj = load_quota_obj(c, user_quota_id)
     mail_quota_obj = load_quota_obj(c, mail_quota_id)
 
     groups_list = []
-    for (group_id) in c.execute('''SELECT group_id FROM groups WHERE owner_id=?''', (user_id,)):
+    for (group_id,) in c.execute('''SELECT group_id FROM groups WHERE owner_id=?''', (user_id,)):
         groups_list.append(group_id)
 
     message_access_list = []
@@ -547,7 +622,9 @@ def read_user(c, timestamp, node_name, user_id, public_key_hash, signature):
             'mail_quota' : mail_quota_obj,
             'num_keys' : num_keys,
             'default_message_access' : default_message_access,
+            'max_message_size' : max_message_size,
             'last_message_time' : last_message_time,
+            'last_timestamp' : last_timestamp,
             'message_access_list' : message_access_list,
             'groups_list' : groups_list}
 
@@ -561,19 +638,20 @@ def read_last_message_time(c, timestamp, node_name, user_id, public_key_hash, si
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
 
-    c.execute('SELECT last_message_time FROM users WHERE user_id=?', (user_id,))
+    c.execute('SELECT last_message_time, last_timestamp FROM users WHERE user_id=?', (user_id,))
     user_row = c.fetchone()
 
     if user_row == None:
-        # This case should trip up assert_request_signature
         raise ex.UnknownUserException(user_id, 'user_id')
 
-    (last_post_time,) = user_row
+    (last_post_time, last_timestamp) = user_row
+
+    assert_and_update_user_timestamp(c, user_id, last_timestamp, timestamp)
 
     return last_post_time
 
 
-def delete_user(c, timestamp, node_name, user_id, public_key_hash, signature):
+def delete_user(c, c2, timestamp, node_name, user_id, public_key_hash, signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
 
@@ -583,13 +661,9 @@ def delete_user(c, timestamp, node_name, user_id, public_key_hash, signature):
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
 
-    c.execute('''SELECT user_id FROM users WHERE user_id=? LIMIT 1''', (user_id,))
-    row = c.fetchone()
+    assert_and_update_user_timestamp2(c, user_id, timestamp)
 
-    if row == None:
-        raise ex.UnknownUserException(user_id, 'user_id')
-
-    remove_user(c, user_id)
+    remove_user(c, c2, user_id)
 
 
 def change_user_quota(c, timestamp, node_name, user_id, new_quota, user_class, auth_token, public_key_hash, signature):
@@ -605,13 +679,18 @@ def change_user_quota(c, timestamp, node_name, user_id, new_quota, user_class, a
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
 
-    c.execute('SELECT user_quota_id FROM users WHERE user_id=?', (user_id,))
+    c.execute('SELECT user_quota_id, last_timestamp FROM users WHERE user_id=?', (user_id,))
     user_row = c.fetchone()
 
     if user_row == None:
         raise ex.UnknownUserException(user_id, 'user_id')
 
-    (user_quota_id,) = user_row
+    (user_quota_id, last_timestamp) = user_row
+
+    assert_and_update_user_timestamp(c, user_id, last_timestamp, timestamp)
+
+    if new_quota > config.max_user_quota:
+        raise ex.UserQuotaTooLargeException(new_quota, config.max_user_quota)
 
     resize_subquota(c, user_quota_id, new_quota)
 
@@ -627,19 +706,23 @@ def read_user_quota(c, timestamp, node_name, user_id, public_key_hash, signature
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
 
-    c.execute('SELECT user_quota_id FROM users WHERE user_id=?', (user_id,))
+    c.execute('SELECT user_quota_id, last_timestamp FROM users WHERE user_id=?', (user_id,))
     user_row = c.fetchone()
 
     if user_row == None:
-        raise UnknownUserException(user_id, 'user_id')
+        raise ex.UnknownUserException(user_id, 'user_id')
 
-    (user_quota_id,) = user_row
+    (user_quota_id, last_timestamp) = user_row
+
+    assert_and_update_user_timestamp(c, user_id, last_timestamp, timestamp)
 
     return load_quota_obj(c, user_quota_id)
+
 
 def change_message_quota(c, timestamp, node_name, user_id, new_quota, when_mail_exhausted, public_key_hash, signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
+
     ut.assert_node_name(node_name, config.node_name)
     ut.assert_non_neg(new_quota, 'new_quota')
     ut.assert_exhaustion(when_mail_exhausted, 'when_mail_exhausted')
@@ -648,13 +731,15 @@ def change_message_quota(c, timestamp, node_name, user_id, new_quota, when_mail_
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
 
-    c.execute('SELECT (mail_quota_id) FROM users WHERE user_id=?', (user_id,))
+    c.execute('SELECT mail_quota_id, last_timestamp FROM users WHERE user_id=?', (user_id,))
     user_row = c.fetchone()
 
     if user_row == None:
-        raise UnknownUserException(user_id, 'user_id')
+        raise ex.UnknownUserException(user_id, 'user_id')
 
-    (mail_quota_id,) = user_row
+    (mail_quota_id, last_timestamp) = user_row
+
+    assert_and_update_user_timestamp(c, user_id, last_timestamp, timestamp)
 
     change_quota(c, mail_quota_id, new_quota, when_mail_exhausted)
 
@@ -668,13 +753,15 @@ def read_message_quota(c, timestamp, node_name, user_id, public_key_hash, signat
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
 
-    c.execute('SELECT mail_quota_id FROM users WHERE user_id=?', (user_id,))
+    c.execute('SELECT mail_quota_id, last_timestamp FROM users WHERE user_id=?', (user_id,))
     user_row = c.fetchone()
 
     if user_row == None:
-        raise UnknownUserException(user_id, 'user_id')
+        raise ex.UnknownUserException(user_id, 'user_id')
 
-    (mail_quota_id,) = user_row
+    (mail_quota_id, last_timestamp) = user_row
+
+    assert_and_update_user_timestamp(c, user_id, last_timestamp, timestamp)
 
     return load_quota_obj(c, mail_quota_id)
 
@@ -736,6 +823,16 @@ def set_message_access(c, timestamp, node_name, user_id, from_key_hash, access, 
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
 
+    c.execute('SELECT user_quota_id, last_timestamp FROM users WHERE user_id=?', (user_id,))
+    user_row = c.fetchone()
+
+    if user_row == None:
+        raise ex.UnknownUserException(user_id, 'user_id')
+
+    (user_quota_id, last_timestamp) = user_row
+
+    assert_and_update_user_timestamp(c, user_id, last_timestamp, timestamp)
+
     if from_key_hash == None:
         set_default_message_access(c, user_id, access)
 
@@ -743,14 +840,6 @@ def set_message_access(c, timestamp, node_name, user_id, from_key_hash, access, 
         message_access = load_message_access(c, user_id, from_key_hash)
     
         if message_access == None:
-            c.execute('SELECT user_quota_id FROM users WHERE user_id=?', (user_id,))
-            user_row = c.fetchone()
-    
-            if user_row == None:
-                raise ex.UnknownUserException(user_id, 'user_id')
-    
-            (user_quota_id,) = user_row
-    
             row = (user_id, from_key_hash, access)
             add_message_access(c, row, user_quota_id)
     
@@ -770,6 +859,8 @@ def read_message_access(c, timestamp, node_name, user_id, from_user_key_hash, pu
             ['READ_MESSAGE_ACCESS', timestamp, node_name, user_id, from_user_key_hash])
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
+
+    assert_and_update_user_timestamp2(c, user_id, timestamp)
 
     if from_user_key_hash == None:
         access = get_default_message_access(c, user_id)
@@ -799,18 +890,20 @@ def delete_message_access(c, timestamp, node_name, user_id, from_user_key_hash, 
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
 
-    message_access = load_message_access(c, user_id, from_user_key_hash)
-
-    if message_access == None:
-        raise ex.UnknownMessageAcessException(user_id, from_user_key_hash)
-
-    c.execute('SELECT user_quota_id FROM users WHERE user_id=?', (user_id,))
+    c.execute('SELECT user_quota_id, last_timestamp FROM users WHERE user_id=?', (user_id,))
     user_row = c.fetchone()
 
     if user_row == None:
         raise ex.UnknownUserException(user_id, 'user_id')
 
-    (user_quota_id,) = user_row
+    (user_quota_id, last_timestamp) = user_row
+
+    assert_and_update_user_timestamp(c, user_id, last_timestamp, timestamp)
+
+    message_access = load_message_access(c, user_id, from_user_key_hash)
+
+    if message_access == None:
+        raise ex.UnknownMessageAcessException(user_id, from_user_key_hash)
 
     row_size = data_size(message_access)
     decrease_quota(c, user_quota_id, row_size)
@@ -822,7 +915,7 @@ def delete_message_access(c, timestamp, node_name, user_id, from_user_key_hash, 
 def query_message_access(c, timestamp, node_name, to_user, from_user, from_user_key_hash, signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
-    ut.assert_node_name(node_name, 'node_name')
+    ut.assert_node_name(node_name, config.node_name)
 
     if from_user_key_hash != None:
         request_string = ut.serialize_request(
@@ -831,8 +924,6 @@ def query_message_access(c, timestamp, node_name, to_user, from_user, from_user_
         assert_request_signature(c, from_user, 'user', request_string, from_user_key_hash, signature)
 
     access = get_message_access(c, to_user, from_user_key_hash)
-
-    print ('query_message_access', timestamp, node_name, to_user, from_user, from_user_key_hash, signature, access)
 
     return {'to_user' : to_user,
             'from_user_key_hash' : from_user_key_hash,
@@ -860,6 +951,11 @@ def load_message(c, to_user, message_id):
     c.execute('''SELECT * FROM messages WHERE to_user=? AND message_id=? LIMIT 1''', (to_user, message_id))
     return c.fetchone()
 
+
+def load_oldest_message(c, to_user):
+    c.execute('''SELECT * FROM messages WHERE to_user=? ORDER BY timestamp LIMIT 1''', (to_user,))
+    return c.fetchone()
+
 def add_message_raw(c, row):
     (message_id, timestamp, to_user, to_user_key, from_user, from_user_key,
      message, message_hash, from_signature, proof_of_work, download_source) = row
@@ -871,7 +967,7 @@ def add_message_raw(c, row):
                   to_user_key,
                   from_user,
                   from_user_key,
-                  message,
+                  bytes(message),
                   message_hash,
                   from_signature,
                   proof_of_work,
@@ -908,6 +1004,126 @@ def get_message_access(c, to_user, from_key_hash):
     return row[0]
 
 
+class MessageDeleter:
+
+    def __init__(self, c, to_user, mail_quota_id):
+        self.c = c
+        self.to_user = to_user
+        self.mail_quota_id = mail_quota_id
+
+    def delete_oldest(self):
+        row = load_oldest_message(self.c, self.to_user)
+        if row == None:
+            return False
+
+        (message_id, timestamp,
+         to_user, to_user_key,
+         from_user, from_user_key,
+         message, message_hash,
+         from_signature, proof_of_work, download_source) = row
+    
+        size = data_size(row)
+        decrease_quota(self.c, self.mail_quota_id, size)
+        remove_message_raw(self.c, message_id)
+        return True
+
+
+def read_max_message_size(c, timestamp, node_name, to_user, from_user, from_user_key_hash, from_signature):
+
+    assert_timestamp_fresh(timestamp, 'timestamp')
+    ut.assert_node_name(node_name, config.node_name)
+
+    if from_user_key_hash != None:
+        request_string = ut.serialize_request(
+                ['READ_MAX_MESSAGE_SIZE', timestamp, node_name, to_user, from_user, from_user_key_hash])
+
+        assert_request_signature(c, from_user, 'user', request_string, from_user_key_hash, from_signature)
+
+    access = get_message_access(c, to_user, from_user_key_hash)
+    if access == 'block':
+        raise ex.BlockedException()
+
+    c.execute('''SELECT max_message_size FROM users WHERE user_id=?''', (to_user,))
+    row = c.fetchone()
+
+    # This should have been detected in get_message_access, but check anyways
+    if row == None:
+        raise ex.UnknownUserException(to_user, 'to_user')
+
+    (max_message_size,) = row
+
+    return max_message_size
+
+
+def change_max_message_size(c, timestamp, node_name, user_id, new_size, public_key_hash, signature):
+
+    assert_timestamp_fresh(timestamp, 'timestamp')
+    ut.assert_node_name(node_name, config.node_name)
+
+    if new_size != None:
+        ut.assert_non_neg(new_size, 'new_size')
+
+    request_string = ut.serialize_request(
+            ['CHANGE_MAX_MESSAGE_SIZE', timestamp, node_name, user_id, new_size])
+
+    assert_request_signature(c, user_id, 'user', request_string, public_key_hash, signature)
+
+    assert_and_update_user_timestamp2(c, user_id, timestamp)
+
+    c.execute('''UPDATE users SET max_message_size=? WHERE user_id=? LIMIT 1''', (new_size, user_id))
+
+
+def read_max_post_size(c, timestamp, node_name, group_id, owner_id, post_signature):
+
+    assert_timestamp_fresh(timestamp, 'timestamp')
+    ut.assert_node_name(node_name, config.node_name)
+
+    request_string = ut.serialize_request(
+            ['READ_MAX_POST_SIZE', timestamp, node_name, group_id, owner_id])
+
+    c.execute('SELECT post_access, posting_key_type, posting_pub_key, max_post_size FROM groups WHERE group_id=? AND owner_id=?',
+              (group_id, owner_id))
+    group_row = c.fetchone()
+
+    if group_row == None:
+        raise ex.UnknownGroupException(group_id, owner_id)
+
+    (post_access, posting_key_type, posting_pub_key, max_post_size) = group_row
+
+    if post_access == 'block':
+        raise ex.BlockedException()
+
+    if posting_pub_key != None:
+        ut.assert_signature(posting_key_type, posting_pub_key, request_string, post_signature, 'request_string')
+
+    return max_post_size
+
+
+def change_max_post_size(c, timestamp, node_name, group_id, owner_id, new_size, public_key_hash, request_signature):
+
+    assert_timestamp_fresh(timestamp, 'timestamp')
+    ut.assert_node_name(node_name, config.node_name)
+
+    if new_size != None:
+        ut.assert_non_neg(new_size, 'new_size')
+
+    request_string = ut.serialize_request(
+            ['CHANGE_MAX_POST_SIZE', timestamp, node_name, group_id, owner_id, new_size])
+
+    assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
+
+    assert_and_update_user_timestamp2(c, owner_id, timestamp)
+
+    row = load_group(c, group_id, owner_id)
+
+    if row == None:
+        raise ex.UnknownGroupException(group_id, owner_id)
+
+    c.execute('UPDATE groups SET max_post_size=? WHERE group_id=? AND owner_id=?',
+              (new_size, group_id, owner_id))
+
+
+
 # message_string is used for signing and proof of work
 # it would typically be a json array of all fields except
 # signature, proof_of_work, and download_source
@@ -930,13 +1146,13 @@ def add_message(c, row, node_name):
              message_hash])
     ut.assert_hash(message_id_string, message_id, 'message_id')
 
-    c.execute('''SELECT mail_quota_id, last_message_time FROM users WHERE user_id=? LIMIT 1''', (to_user,))
+    c.execute('''SELECT mail_quota_id, max_message_size, last_message_time FROM users WHERE user_id=? LIMIT 1''', (to_user,))
     user_row = c.fetchone()
 
     if user_row == None:
         raise ex.UnknownUserException(to_user, 'to_user')
 
-    (mail_quota_id, last_message_time) = user_row
+    (mail_quota_id, max_message_size, last_message_time) = user_row
 
     if to_user_key_hash != None:
         c.execute('''SELECT identity, identity_type FROM keys WHERE public_key_hash=? LIMIT 1''', (to_user_key_hash,))
@@ -974,8 +1190,24 @@ def add_message(c, row, node_name):
         c.execute('''UPDATE users SET last_message_time=? WHERE user_id=?''', (timestamp, to_user))
  
     size = data_size(row)
-    try_increment_quota(c, mail_quota_id, size)
-    add_message_raw(c, row)
+
+    if max_message_size != None and size > max_message_size:
+        raise ex.MessageTooLargeException(size, max_message_size)
+
+    c.execute('SELECT to_user, message_id FROM messages WHERE to_user=? AND message_id=?',
+              (to_user, message_id))
+    existing_row = c.fetchone();
+
+    if existing_row != None:
+        raise ex.MessageIdExistsException(to_user, message_id)
+
+    deleter = MessageDeleter(c, to_user, mail_quota_id)
+    try_increment_quota(c, mail_quota_id, size, deleter)
+
+    try:
+        add_message_raw(c, row)
+    except sqlite3.IntegrityError as e:
+        raise ex.MessageIdExistsException(to_user, message_id)
 
 def read_message(c, timestamp, node_name, user_id, message_id, public_key_hash, request_signature):
 
@@ -987,10 +1219,11 @@ def read_message(c, timestamp, node_name, user_id, message_id, public_key_hash, 
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, request_signature)
 
+    assert_and_update_user_timestamp2(c, user_id, timestamp)
+
     row = load_message(c, user_id, message_id)
     if row == None:
         raise ex.UnknownMessageException(user_id, message_id)
-
 
     (message_id, timestamp,
      to_user, to_user_key,
@@ -1017,15 +1250,17 @@ def delete_message(c, timestamp, node_name, user_id, message_id, public_key_hash
 
     request_string = ut.serialize_request(['DELETE_MESSAGE', timestamp, node_name, user_id, message_id])
 
-    c.execute('''SELECT mail_quota_id FROM users WHERE user_id=?''', (user_id,))
+    c.execute('''SELECT mail_quota_id, last_timestamp FROM users WHERE user_id=?''', (user_id,))
     user_row = c.fetchone()
 
     if user_row == None:
         raise ex.UnknownUserException(user_id, 'user_id')
 
-    (mail_quota_id,) = user_row
+    (mail_quota_id, last_timestamp) = user_row
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, request_signature)
+
+    assert_and_update_user_timestamp(c, user_id, last_timestamp, timestamp)
 
     row = load_message(c, user_id, message_id)
     if row == None:
@@ -1034,6 +1269,7 @@ def delete_message(c, timestamp, node_name, user_id, message_id, public_key_hash
     size = data_size(row)
     decrease_quota(c, mail_quota_id, size)
     remove_message_raw(c, message_id)
+
 
 
 def timestamp_range_sql_string(sql_string, args, start_time, end_time, max_records, order):
@@ -1058,15 +1294,21 @@ def timestamp_range_sql_string(sql_string, args, start_time, end_time, max_recor
     return (sql_string, args)
 
 
-def read_message_list(c, timestamp, node_name, user_id, start_time, end_time, max_records, order, public_key_hash, request_signature):
+def read_message_list(c, timestamp, node_name, user_id,
+        to_user_key, from_user, from_user_key,
+        start_time, end_time, max_records, order, public_key_hash, request_signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
     ut.assert_node_name(node_name, config.node_name)
 
     request_string = ut.serialize_request(
-            ['READ_MESSAGE_LIST', timestamp, node_name, user_id, start_time, end_time, max_records, order])
+            ['READ_MESSAGE_LIST', timestamp, node_name, user_id,
+             to_user_key, from_user, from_user_key,
+             start_time, end_time, max_records, order])
 
     assert_request_signature(c, user_id, 'user', request_string, public_key_hash, request_signature)
+
+    assert_and_update_user_timestamp2(c, user_id, timestamp)
 
     if start_time != None:
         ut.assert_timestamp(start_time, 'start_time')
@@ -1089,6 +1331,18 @@ def read_message_list(c, timestamp, node_name, user_id, start_time, end_time, ma
                     WHERE to_user=?'''
 
     args = [user_id]
+
+    if to_user_key != None:
+        sql_string += ''' AND to_user_key=?'''
+        args.append(to_user_key_hash)
+
+    if from_user != None:
+        sql_string += ''' AND from_user=?'''
+        args.append(from_user)
+
+    if from_user_key != None:
+        sql_string += ''' AND from_user_key=?'''
+        args.append(from_user_key_hash)
 
     (sql_string, args) = timestamp_range_sql_string(sql_string, args, start_time, end_time, max_records, order)
 
@@ -1121,10 +1375,11 @@ def add_group_raw(c, row):
      posting_key_type, posting_pub_key,
      reading_key_type, reading_pub_key,
      delete_key_type, delete_pub_key,
-     quota_id, last_post_time) = row
+     quota_id, max_post_size,
+     last_post_time) = row
 
     c.execute('''INSERT INTO groups
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                  (group_id,
                   owner_id,
                   post_access,
@@ -1137,6 +1392,7 @@ def add_group_raw(c, row):
                   delete_key_type,
                   delete_pub_key,
                   quota_id,
+                  max_post_size,
                   last_post_time))
 
 def load_group(c, group_id, owner_id):
@@ -1176,7 +1432,8 @@ def create_group(c, row, node_name, public_key_hash, request_signature):
      posting_key_type, posting_pub_key,
      reading_key_type, reading_pub_key,
      delete_key_type, delete_pub_key,
-     quota_allocated, when_space_exhausted) = row
+     quota_allocated, when_space_exhausted,
+     max_post_size) = row
 
     finished = False
 
@@ -1190,9 +1447,12 @@ def create_group(c, row, node_name, public_key_hash, request_signature):
              posting_key_type, posting_pub_key,
              reading_key_type, reading_pub_key,
              delete_key_type, delete_pub_key,
-             quota_allocated, when_space_exhausted])
+             quota_allocated, when_space_exhausted,
+             max_post_size])
 
     assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
+
+    assert_and_update_user_timestamp2(c, owner_id, timestamp)
 
     ut.assert_access(post_access, 'post_access')
     ut.assert_access(read_access, 'read_access')
@@ -1227,10 +1487,16 @@ def create_group(c, row, node_name, public_key_hash, request_signature):
                      posting_key_type, posting_pub_key,
                      reading_key_type, reading_pub_key,
                      delete_key_type, delete_pub_key,
-                     quota_id, None)
+                     quota_id, max_post_size,
+                     None)
         row_size = data_size(row_entry)
         try_increment_quota(c, quota_id, row_size)
-        add_group_raw(c, row_entry)
+
+        try:
+            add_group_raw(c, row_entry)
+        except sqlite3.IntegrityError as e:
+            raise ex.GroupExistsException(group_id, owner_id)
+
         finished = True
 
     finally:
@@ -1247,6 +1513,8 @@ def read_group(c, timestamp, node_name, group_id, owner_id, public_key_hash, req
 
     assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
 
+    assert_and_update_user_timestamp2(c, owner_id, timestamp)
+
     row = load_group(c, group_id, owner_id)
 
     if row == None:
@@ -1256,7 +1524,8 @@ def read_group(c, timestamp, node_name, group_id, owner_id, public_key_hash, req
      posting_key_type, posting_pub_key,
      reading_key_type, reading_pub_key,
      delete_key_type, delete_pub_key, 
-     quota_id, last_post_time) = row
+     quota_id, max_post_size,
+     last_post_time) = row
 
     quota_obj = load_quota_obj(c, quota_id)
 
@@ -1272,6 +1541,7 @@ def read_group(c, timestamp, node_name, group_id, owner_id, public_key_hash, req
             'delete_key_type' : delete_key_type,
             'delete_pub_key' : delete_pub_key,
             'quota' : quota_obj,
+            'max_post_size' : max_post_size,
             'last_post_time' : last_post_time}
 
 
@@ -1310,6 +1580,8 @@ def delete_group(c, timestamp, node_name, group_id, owner_id, public_key_hash, r
 
     assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
 
+    assert_and_update_user_timestamp2(c, owner_id, timestamp)
+
     c.execute('''SELECT group_id FROM groups WHERE group_id=? AND owner_id=? LIMIT 1''', (group_id, owner_id))
     row = c.fetchone()
 
@@ -1334,6 +1606,8 @@ def change_group_quota(c,
             ['CHANGE_GROUP_QUOTA', timestamp, node_name, group_id, owner_id, new_quota, when_space_exhausted])
 
     assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
+
+    assert_and_update_user_timestamp2(c, owner_id, timestamp)
 
     c.execute('SELECT quota_id FROM groups WHERE group_id=? AND owner_id=?',
               (group_id, owner_id))
@@ -1383,14 +1657,7 @@ def change_group_access(c, timestamp, node_name, group_id, owner_id, use, access
 
     assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
 
-#    c.execute('SELECT user_quota_id FROM users WHERE user_id=?', (owner_id,))
-#    row = c.fetchone()
-#
-#    if row == None:
-#        # should not happen
-#        raise ex.UnknownUserException(owner_id, 'owner_id')
-#
-#    (user_quota_id,) = row
+    assert_and_update_user_timestamp2(c, owner_id, timestamp)
 
     c.execute('SELECT * FROM groups WHERE group_id=? AND owner_id=?', (group_id, owner_id))
     row = c.fetchone()
@@ -1399,7 +1666,8 @@ def change_group_access(c, timestamp, node_name, group_id, owner_id, use, access
      posting_key_type, posting_pub_key,
      reading_key_type, reading_pub_key, 
      delete_key_type, delete_pub_key, 
-     quota_id, last_post_time) = row
+     quota_id, max_post_size,
+     last_post_time) = row
 
     old_size = data_size(row)
     new_access_size = len(access)
@@ -1433,7 +1701,7 @@ def change_group_access(c, timestamp, node_name, group_id, owner_id, use, access
 def read_group_access(c, timestamp, node_name, group_id, owner_id, use, request_signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
-    ut.assert_node_name(node_name, 'node_name')
+    ut.assert_node_name(node_name, config.node_name)
 
     request_string = ut.serialize_request(
             ['READ_GROUP_ACCESS', timestamp, node_name, group_id, owner_id, use])
@@ -1471,12 +1739,14 @@ def read_group_access(c, timestamp, node_name, group_id, owner_id, use, request_
 def change_group_key(c, timestamp, node_name, group_id, owner_id, key_use, key_type, public_key, public_key_hash, request_signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
-    ut.assert_node_name(node_name, 'node_name')
+    ut.assert_node_name(node_name, config.node_name)
 
     request_string = ut.serialize_request(
             ['CHANGE_GROUP_KEY', timestamp, node_name, group_id, owner_id, key_use, key_type, public_key])
 
     assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
+
+    assert_and_update_user_timestamp2(c, owner_id, timestamp)
 
     row = load_group(c, group_id, owner_id)
 
@@ -1487,7 +1757,8 @@ def change_group_key(c, timestamp, node_name, group_id, owner_id, key_use, key_t
      posting_key_type, posting_pub_key,
      reading_key_type, reading_pub_key,
      delete_key_type, delete_pub_key, 
-     quota_id, last_post_time) = row
+     quota_id, max_post_size,
+     last_post_time) = row
 
     sql_string = None
     old_size = None
@@ -1516,12 +1787,14 @@ def change_group_key(c, timestamp, node_name, group_id, owner_id, key_use, key_t
 def read_group_key(c, timestamp, node_name, group_id, owner_id, key_use, public_key_hash, request_signature):
 
     assert_timestamp_fresh(timestamp, 'timestamp')
-    ut.assert_node_name(node_name, 'node_name')
+    ut.assert_node_name(node_name, config.node_name)
 
     request_string = ut.serialize_request(
             ['READ_GROUP_KEY', timestamp, node_name, group_id, owner_id, key_use])
 
     assert_request_signature(c, owner_id, 'user', request_string, public_key_hash, request_signature)
+
+    assert_and_update_user_timestamp2(c, owner_id, timestamp)
 
     sql_string = None
 
@@ -1573,6 +1846,10 @@ def load_post(c, post_id, group_id, owner_id):
     c.execute('''SELECT * FROM group_posts WHERE post_id=? AND group_id=? AND owner_id=? LIMIT 1''', (post_id, group_id, owner_id))
     return c.fetchone()
 
+def load_oldest_post(c, group_id, owner_id):
+    c.execute('''SELECT * FROM group_posts WHERE group_id=? AND owner_id=? ORDER BY timestamp LIMIT 1''', (group_id, owner_id))
+    return c.fetchone()
+
 def remove_post(c, post_id, group_id, owner_id, quota_id):
     row = load_post(c, post_id, group_id, owner_id)
     size = data_size(row)
@@ -1582,6 +1859,27 @@ def remove_post(c, post_id, group_id, owner_id, quota_id):
 def remove_group_posts(c, group_id, owner_id):
     c.execute('''DELETE FROM group_posts WHERE group_id=? AND owner_id=?''', (group_id, owner_id))
 
+
+class PostDeleter:
+
+    def __init__(self, c, group_id, owner_id, quota_id):
+        self.c = c
+        self.group_id = group_id
+        self.owner_id = owner_id
+        self.quota_id = quota_id
+
+    def delete_oldest(self):
+        row = load_oldest_post(self.c, self.group_id, self.owner_id)
+        if row == None:
+            return False
+
+        (post_id, timestamp, group_id, owner_id, data, data_hash,
+         post_signature, proof_of_work, download_source) = row
+
+        size = data_size(row)
+        decrease_quota(self.c, self.quota_id, size)
+        remove_post_raw(self.c, post_id, group_id, owner_id)
+        return True
 
 
 def create_post(c, row, node_name):
@@ -1597,14 +1895,14 @@ def create_post(c, row, node_name):
 
     ut.assert_hash(post_string, post_id, 'post_id')
 
-    c.execute('''SELECT quota_id, post_access, posting_key_type, posting_pub_key, last_post_time FROM groups WHERE group_id=? AND owner_id=? LIMIT 1''',
+    c.execute('''SELECT quota_id, post_access, posting_key_type, posting_pub_key, max_post_size, last_post_time FROM groups WHERE group_id=? AND owner_id=? LIMIT 1''',
               (group_id, owner_id))
     group_row = c.fetchone()
 
     if group_row == None:
         raise ex.UnknownGroupException(group_id, owner_id)
 
-    (quota_id, post_access, posting_key_type, posting_pub_key, last_post_time) = group_row
+    (quota_id, post_access, posting_key_type, posting_pub_key, max_post_size, last_post_time) = group_row
 
     # Should this be enforced?
     # Differences in latency could prevent users from posting.
@@ -1618,9 +1916,7 @@ def create_post(c, row, node_name):
     existing_post = c.fetchone()
 
     if existing_post != None:
-        # try again with a different timestamp
-        (existing_timestamp, existing_data_hash) = existing_post
-        raise ex.GroupPostIdExists(post_id, existing_timestamp, group_id, owner_id, existing_data_hash)
+        raise ex.GroupPostIdExists(post_id, group_id, owner_id)
 
     ut.assert_has_access(post_access, post_id, proof_of_work, 'post_id')
 
@@ -1628,8 +1924,17 @@ def create_post(c, row, node_name):
         ut.assert_signature(posting_key_type, posting_pub_key, post_id, post_signature, 'post_id')
 
     size = data_size(row)
-    try_increment_quota(c, quota_id, size)
-    add_post_raw(c, row)
+
+    if max_post_size != None and size > max_post_size:
+        raise ex.PostTooLargeException(size, max_post_size)
+
+    deleter = PostDeleter(c, group_id, owner_id, quota_id)
+    try_increment_quota(c, quota_id, size, deleter)
+
+    try:
+        add_post_raw(c, row)
+    except sqlite3.IntegrityError as e:
+        raise ex.GroupPostIdExists(post_id, group_id, owner_id)
 
 
 def delete_post(c, timestamp, node_name, group_id, owner_id, post_id, request_proof_of_work, request_signature):
@@ -1662,6 +1967,7 @@ def delete_post(c, timestamp, node_name, group_id, owner_id, post_id, request_pr
     size = data_size(row)
     decrease_quota(c, quota_id, size)
     remove_post_raw(c, post_id, group_id, owner_id)
+
 
 
 def read_post(c, timestamp, node_name, group_id, owner_id, post_id, request_proof_of_work, request_signature):
@@ -1858,7 +2164,6 @@ def read_database(c):
 
 def check_integrity(c1, c2, all_local):
 
-
     errors = []
 
     for row in c1.execute('SELECT * FROM keys'):
@@ -1931,7 +2236,8 @@ def check_integrity(c1, c2, all_local):
         (user_id, default_key_hash,
          user_quota_id, mail_quota_id,
          num_keys, default_message_access,
-         last_message_time, download_source) = row
+         max_message_size,
+         last_message_time, last_timestamp, download_source) = row
 
         key_row = c2.execute('''SELECT identity, identity_type
                                 FROM keys WHERE public_key_hash=?''', (default_key_hash,)).fetchone()
@@ -1988,7 +2294,8 @@ def check_integrity(c1, c2, all_local):
          posting_key_type, posting_pub_key,
          reading_key_type, reading_pub_key,
          delete_key_type, delete_pub_key, 
-         quota_id, last_post_time) = row
+         quota_id, max_post_size,
+         last_post_time) = row
 
         user_row = c2.execute('SELECT user_id FROM users WHERE user_id=?', (owner_id,)).fetchone()
         if user_row == None:

@@ -18,6 +18,7 @@ def post_handler(environ):
     when_mail_exhausted = ht.get_required(query, 'when_mail_exhausted')
     quota_size = ht.convert_int(ht.get_required(query, 'quota_size'), 'quota_size')
     mail_quota_size = ht.convert_int(ht.get_required(query, 'mail_quota_size'), 'mail_quota_size')
+    max_message_size = ht.convert_int(ht.get_optional(query, 'max_message_size'), 'max_message_size')
     user_class = ht.get_optional(query, 'user_class')
     auth_token = ht.get_optional(query, 'auth_token')
 
@@ -28,6 +29,7 @@ def post_handler(environ):
                               node_name, public_key_hash,
                               default_message_access, when_mail_exhausted,
                               quota_size, mail_quota_size,
+                              max_message_size,
                               user_class, auth_token)
         db.commit(conn)
 

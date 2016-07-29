@@ -34,6 +34,7 @@ Alf = tp.User(
         when_mail_exhausted='block',
         quota_size=100*1024*1024,
         mail_quota_size=10*1024*1024,
+        max_message_size=None,
         user_class=None,
         auth_token=None)
 

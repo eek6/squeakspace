@@ -95,7 +95,9 @@ class Client:
                      group_id, owner_id,
                      post_access, read_access, delete_access,
                      posting_pub_key, reading_pub_key, delete_pub_key,
-                     quota_allocated, when_space_exhausted, auth_key):
+                     quota_allocated, when_space_exhausted,
+                     max_post_size,
+                     auth_key):
     
         timestamp = ut.current_time()
 
@@ -125,7 +127,8 @@ class Client:
              posting_key_type, posting_pub_key_str,
              reading_key_type, reading_pub_key_str,
              delete_key_type, delete_pub_key_str,
-             quota_allocated, when_space_exhausted])
+             quota_allocated, when_space_exhausted,
+             max_post_size])
 
         signature = auth_key.sign(request_string)
     
@@ -144,6 +147,7 @@ class Client:
             reading_key_type, reading_pub_key_str,
             delete_key_type, delete_pub_key_str,
             quota_allocated, when_space_exhausted,
+            max_post_size,
             auth_key.public_key_hash, signature)[0]
     
     
@@ -260,6 +264,68 @@ class Client:
 
         return self.client_raw.query_message_access(
                 timestamp, self.node_name, to_user, from_user, public_key_hash, signature)[0]
+
+    #max-message-size
+
+    def read_max_message_size(self, to_user, from_user, from_key):
+
+        timestamp = ut.current_time()
+
+        public_key_hash = None
+        signature = None
+        if from_key != None:
+            request_string = ut.serialize_request(
+                    ['READ_MAX_MESSAGE_SIZE', timestamp, self.node_name, to_user, from_user, from_key.public_key_hash])
+
+            public_key_hash = from_key.public_key_hash
+            signature = from_key.sign(request_string)
+
+        return self.client_raw.read_max_message_size(
+                timestamp, self.node_name, to_user, from_user, public_key_hash, signature)[0]
+
+    def change_max_message_size(self, user_id, new_size, auth_key):
+
+        timestamp = ut.current_time()
+
+        request_string = ut.serialize_request(
+                ['CHANGE_MAX_MESSAGE_SIZE', timestamp, self.node_name, user_id, new_size])
+
+        public_key_hash = auth_key.public_key_hash
+        signature = auth_key.sign(request_string)
+
+        return self.client_raw.change_max_message_size(
+                timestamp, self.node_name, user_id, new_size, public_key_hash, signature)[0]
+
+
+    #max-post-size
+
+    def read_max_post_size(self, group_id, owner_id, group_post_key):
+        timestamp = ut.current_time()
+    
+        request_string = ut.serialize_request(
+                ['READ_MAX_POST_SIZE', timestamp, self.node_name, group_id, owner_id])
+    
+        post_signature = None
+        if group_post_key != None:
+            post_signature = group_post_key.sign(request_string)
+    
+        return self.client_raw.read_max_post_size(
+                timestamp, self.node_name, group_id, owner_id, post_signature)[0]
+
+
+    def change_max_post_size(self, group_id, owner_id, new_size, auth_key):
+
+        timestamp = ut.current_time()
+
+        request_string = ut.serialize_request(
+                ['CHANGE_MAX_POST_SIZE', timestamp, self.node_name, group_id, owner_id, new_size])
+
+        public_key_hash = auth_key.public_key_hash
+        signature = auth_key.sign(request_string)
+
+        return self.client_raw.change_max_post_size(
+                timestamp, self.node_name, group_id, owner_id, new_size, public_key_hash, signature)[0]
+
     
     #message-access
     
@@ -305,19 +371,23 @@ class Client:
     #message-list
     
     
-    def read_message_list(self, user_id, start_time, end_time, max_records, order, auth_key):
+    def read_message_list(self, user_id,
+            to_user_key, from_user, from_user_key,
+            start_time, end_time, max_records, order, auth_key):
     
         timestamp = ut.current_time()
     
         request_string = ut.serialize_request(
                 ['READ_MESSAGE_LIST',
                  timestamp, self.node_name, user_id,
+                 to_user_key, from_user, from_user_key,
                  start_time, end_time, max_records, order])
     
         signature = auth_key.sign(request_string)
     
         return self.client_raw.read_message_list(
                 timestamp, self.node_name, user_id,
+                to_user_key, from_user, from_user_key,
                 start_time, end_time, max_records, order,
                 auth_key.public_key_hash, signature)[0]
     
@@ -520,12 +590,19 @@ class Client:
         return self.client_raw.delete_post(
                 timestamp, self.node_name, group_id, owner_id, post_id,
                 delete_signature, proof_of_work)[0]
+
+    #query-user
+
+    def query_user(self, user_id):
+
+        return self.client_raw.query_user(self.node_name, user_id)[0]
     
     #user
     
     def create_user(self, user_id, pub_key, revoke_date,
                     default_message_access, when_mail_exhausted,
                     quota_size, mail_quota_size,
+                    max_message_size,
                     user_class, auth_token):
 
         return self.client_raw.create_user(
@@ -533,6 +610,7 @@ class Client:
                 pub_key.key_type, pub_key.public_key, pub_key.public_key_hash, revoke_date,
                 default_message_access, when_mail_exhausted,
                 quota_size, mail_quota_size,
+                max_message_size,
                 user_class, auth_token)[0]
     
     
@@ -590,10 +668,15 @@ class Client:
     
         return self.client_raw.read_user_quota(timestamp, self.node_name, user_id, auth_key.public_key_hash, signature)[0]
     
+
+    # quota-available
     
+    def read_quota_available(self, user_class):
     
+        return self.client_raw.read_quota_available(self.node_name, user_class)[0]
+ 
+
     # version
-    
     
     def read_version(self):
     

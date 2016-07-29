@@ -316,6 +316,19 @@ def load_other_user_key(c, local_user_id, user_id, node_name, public_key_hash):
 
     return key, revoke_date, trust_score
 
+# Trys to load a public user key. If that fails, loads an other user key.
+def load_generic_user_key(c, local_user_id, user_id, node_name, public_key_hash):
+
+    if local_user_id == user_id:
+        try:
+            key, revoke_date = load_public_user_key(c, local_user_id, node_name, public_key_hash)
+            return key, revoke_date, 'self'
+        except ex.UserKeyNotFoundException as e:
+            return load_other_user_key(c, local_user_id, user_id, node_name, public_key_hash)
+
+    return load_other_user_key(c, local_user_id, user_id, node_name, public_key_hash)
+
+
 
 def load_group_key(c, user_id, group_id, owner_id, node_name, key_use, passphrase=None):
 
@@ -411,14 +424,7 @@ def decrypt(c, user_id, session_id, public_key_hash, ciphertext, passphrase=None
 
     key, revoke_date = load_private_key(c, user_id, public_key_hash, passphrase)
 
-    plaintext = None
-
-    try:
-        plaintext = key.decrypt(ciphertext)
-    except common_ex.SimpleBadPassphraseException:
-        raise common_ex.BadPassphraseException(public_key_hash)
-
-    return plaintext
+    return key.decrypt(ciphertext)
 
 
 # local/crypt/verify_signature.wsgi
@@ -443,14 +449,7 @@ def sign(c, user_id, session_id, public_key_hash, data, passphrase=None):
 
     key, revoke_date = load_private_key(c, user_id, public_key_hash, passphrase)
 
-    signature = None
-
-    try:
-        signature = key.sign(data)
-    except common_ex.SimpleBadPassphraseException:
-        raise common_ex.BadPassphraseException(public_key_hash)
-
-    return signature
+    return key.sign(data)
 
 
 
@@ -490,24 +489,52 @@ def import_public_key(c, user_id, session_id, key_type, public_key, revoke_date)
                   (user_id, public_key_hash, key_type, public_key, revoke_date))
 
     except sqlite3.IntegrityError as e:
-        raise ex.KeyExistsException(user_id, public_key_hash, 'public')
+
+        c.execute('SELECT key_type, public_key FROM public_keys WHERE user_id=? AND public_key_hash=?',
+                  (user_id, public_key_hash))
+        row = c.fetchone()
+        (existing_key_type, existing_public_key) = row
+        match = (key_type, public_key) == (existing_key_type, existing_public_key)
+        # if match is false, a sha256 collision has occurred.
+
+        raise ex.KeyExistsException(user_id, public_key_hash, 'public', match)
 
     return public_key_hash
 
 
 # private-key.wsgi
 
-def read_private_key(c, user_id, session_id, public_key_hash):
+def read_private_key(c, user_id, session_id, public_key_hash, only_public_part=None, allow_private_user_key=None):
+
+    if only_public_part == None:
+        only_public_part = False
+
+    if allow_private_user_key == None:
+        allow_private_user_key = False
 
     assert_session_id(c, user_id, session_id)
 
+    if allow_private_user_key == False and only_public_part == False:
+
+        c.execute('SELECT node_name FROM user_keys WHERE user_id=? AND public_key_hash=?',
+                  (user_id, public_key_hash))
+        row = c.fetchone()
+
+        if row != None:
+            raise ex.PrivateUserKeyNotAllowedException(public_key_hash)
+
     key, revoke_date = load_private_key(c, user_id, public_key_hash)
 
-    return {'public_key_hash' : key.public_key_hash,
-            'key_type' : key.key_type,
-            'public_key' : key.public_key,
-            'private_key' : key.private_key,
-            'revoke_date' : revoke_date}
+    resp = {}
+    resp['public_key_hash'] = key.public_key_hash
+    resp['key_type'] = key.key_type
+    resp['public_key'] = key.public_key
+    resp['revoke_date'] = revoke_date
+
+    if only_public_part == False:
+        resp['private_key'] = key.private_key
+
+    return resp
 
 
 def delete_private_key(c, user_id, session_id, public_key_hash):
@@ -525,7 +552,15 @@ def insert_private_key(c, row):
         c.execute('INSERT INTO private_keys VALUES (?, ?, ?, ?, ?, ?)', row)
 
     except sqlite3.IntegrityError:
-        raise ex.KeyExistsException(user_id, public_key_hash, 'private')
+
+        c.execute('SELECT key_type, public_key FROM private_keys WHERE user_id=? AND public_key_hash=?',
+                  (user_id, public_key_hash))
+        row = c.fetchone()
+        (existing_key_type, existing_public_key) = row
+        match = (key_type, public_key) == (existing_key_type, existing_public_key)
+        # if match is false, a sha256 collision has occurred.
+
+        raise ex.KeyExistsException(user_id, public_key_hash, 'private', match)
 
 
 
@@ -591,12 +626,24 @@ def read_local_group_key(c, user_id, session_id, group_id, owner_id, node_name, 
             'public_key_hash' : public_key_hash}
 
 
+def delete_local_group_key_raw(c, user_id, group_id, owner_id, node_name, key_use):
+
+    c.execute('DELETE FROM group_keys WHERE local_user_id=? AND group_id=? AND owner_id=? AND node_name=? AND key_use=?',
+              (user_id, group_id, owner_id, node_name, key_use))
+
+
 def delete_local_group_key(c, user_id, session_id, group_id, owner_id, node_name, key_use):
 
     assert_session_id(c, user_id, session_id)
 
-    c.execute('DELETE FROM group_keys WHERE local_user_id=? AND group_id=? AND owner_id=? AND node_name=? AND key_use=?',
-              (user_id, group_id, owner_id, node_name, key_use))
+    delete_local_group_key_raw(c, user_id, group_id, owner_id, node_name, key_use)
+
+
+def update_local_group_key(c, user_id, group_id, owner_id, node_name, key_use, public_key_hash):
+
+    c.execute('INSERT OR REPLACE INTO group_keys VALUES (?, ?, ?, ?, ?, ?)',
+              (user_id, group_id, owner_id, node_name, key_use, public_key_hash))
+
 
 
 def assign_local_group_key(c, user_id, session_id, group_id, owner_id, node_name, key_use, public_key_hash):
@@ -609,8 +656,8 @@ def assign_local_group_key(c, user_id, session_id, group_id, owner_id, node_name
     if row == None:
         raise ex.PrivateKeyNotFoundException()
 
-    c.execute('INSERT OR REPLACE INTO group_keys VALUES (?, ?, ?, ?, ?, ?)',
-              (user_id, group_id, owner_id, node_name, key_use, public_key_hash))
+    update_local_group_key(c, user_id, group_id, owner_id, node_name, key_use, public_key_hash)
+
 
 
 # local/list-public-keys.wsgi
@@ -766,7 +813,7 @@ def read_other_user_key(c, local_user_id, session_id, user_id, node_name, public
     row = c.fetchone()
 
     if row == None:
-        raise ex.UserKeyNotFoundException(user_id, public_key_hash)
+        raise ex.UserKeyNotFoundException(user_id, node_name, public_key_hash)
 
     (local_user_id, user_id, node_name, public_key_hash, trust_score) = row
 
@@ -953,8 +1000,6 @@ def delete_local_group_access(c, user_id, session_id, group_id, owner_id, node_n
 
 def set_local_default_message_access(c, user_id, to_user, node_name, access, timestamp = None):
 
-    # print ('set_local_default_message_access', user_id, to_user, node_name, access, timestamp)
-
     if timestamp == None:
         timestamp = ut.current_time()
 
@@ -993,8 +1038,6 @@ def load_local_default_message_access(c, user_id, to_user, node_name):
 
 def find_local_message_access_(c, user_id, to_user, node_name, from_user_key_hash):
     
-    # print ('find_local_message_access:', ('user_id', user_id), ('to_user', to_user), ('node_name', node_name), ('from_user_key_hash', from_user_key_hash))
-
     c.execute('''SELECT access, timestamp FROM message_access WHERE user_id=?
                         AND to_user=? AND node_name=? AND from_user_key_hash=?''',
               (user_id, to_user, node_name, from_user_key_hash))
@@ -1053,8 +1096,6 @@ def read_local_message_access(c, user_id, session_id, to_user, node_name, from_u
 
 def update_local_message_access_(c, user_id, to_user, node_name, from_user_key_hash, access, timestamp = None):
 
-    # print ('update_local_message_access_', user_id, to_user, node_name, from_user_key_hash, access, timestamp)
-
     assert(from_user_key_hash != None)
 
     if timestamp == None:
@@ -1069,8 +1110,6 @@ def debug_local_message_access(c, user_id):
 
 def update_local_message_access(c, user_id, to_user, node_name, from_user_key_hash, access, timestamp = None):
 
-    # print ('update_local_message_access', user_id, to_user, node_name, from_user_key_hash, access, timestamp)
-
     if timestamp == None:
         timestamp = ut.current_time()
 
@@ -1078,10 +1117,6 @@ def update_local_message_access(c, user_id, to_user, node_name, from_user_key_ha
         set_local_default_message_access(c, user_id, to_user, node_name, access, timestamp)
     else:
         update_local_message_access_(c, user_id, to_user, node_name, from_user_key_hash, access, timestamp)
-
-    access_, timestamp_ = load_local_message_access(c, user_id, to_user, node_name, from_user_key_hash)
-    assert(access_ == access)
-    assert(timestamp_ == timestamp)
 
 
 def delete_raw_local_message_access(c, user_id, to_user, node_name, from_user_key_hash):
@@ -1127,9 +1162,6 @@ def delete_passphrase(c, user_id, session_id, public_key_hash):
 
 # password.wsgi
 
-def make_no_password_obj():
-    return {'method' : 'no_password'}
-
 def make_hash_password_obj(password):
     salt = base64.b64encode(os.urandom(config.pass_salt_len))
     hash = base64.b64encode(kd.pbkdf2_hmac(config.pass_hash_fun, password, salt, config.pass_rounds))
@@ -1148,11 +1180,11 @@ def make_passphrase_password_obj(c, user_id, public_key_hash):
 
     (public_key, private_key) = row
 
-    c.execute('SELECT public_key_hash FROM user_keys WHERE user_id=? AND public_key_hash=?',
-              (user_id, public_key_hash))
-    row = c.fetchone()
-    if row == None:
-        raise ex.UserKeyNotFoundException(user_id, public_key_hash)
+#    c.execute('SELECT public_key_hash FROM user_keys WHERE user_id=? AND public_key_hash=?',
+#              (user_id, public_key_hash))
+#    row = c.fetchone()
+#    if row == None:
+#        raise ex.UserKeyNotFoundException(user_id, public_key_hash)
 
     return {'method' : 'passphrase', 'public_key_hash' : public_key_hash}
 
@@ -1164,15 +1196,10 @@ def set_password(c, user_id, session_id, method, password, public_key_hash):
 
     password_obj = None
 
-    if method == 'no_password':
-        password_obj = make_no_password_obj()
-
-    elif method == 'hash':
-        password = method['password']
+    if method == 'hash':
         password_obj = make_hash_password_obj(password)
 
     elif method == 'passphrase':
-        public_key_hash = password_params['public_key_hash']
         password_obj = make_passphrase_password_obj(c, user_id, public_key_hash)
 
     else:
@@ -1201,9 +1228,6 @@ def get_password(c, user_id, session_id):
 
 # login.wsgi
 
-def assert_no_password():
-    pass
-
 def assert_hash_password(user_id, password, params):
     # strings come out of json as unicode.
     stored_hash = str(params['hash'])
@@ -1213,58 +1237,51 @@ def assert_hash_password(user_id, password, params):
     if not kd.compare_digest(hash, stored_hash):
         raise ex.BadPasswordException(user_id, password)
 
-def assert_passphrase_password(c, user_id, password, public_key_hash):
-    c.execute('SELECT user_id FROM user_keys WHERE user_id=? AND public_key_hash=?',
-              (user_id, public_key_hash))
-    row = c.fetchone()
-    assert(row != None)
+def assert_passphrase_password(c, user_id, passphrase, public_key_hash):
 
-    c.execute('SELECT key_type, private_key FROM private_keys WHERE user_id=? AND public_key_hash=?',
-              (user_id, public_key_hash))
-    row = c.fetchone()
-    assert(row != None)
+    key, revoke_date = load_private_key(c, user_id, public_key_hash, passphrase)
 
-    (key_type, private_key) = row
-
-    ut.assert_passphrase(key_type, private_key, passphrase)
+    key.assert_passphrase()
 
 
 
 def login(c, user_id, password):
 
-    c.execute('SELECT params FROM user_passwords WHERE user_id=?', (user_id,))
-    row = c.fetchone()
+    try:
+        c.execute('SELECT params FROM user_passwords WHERE user_id=?', (user_id,))
+        row = c.fetchone()
+    
+        if row == None:
+            raise ex.UnregisteredUserException(user_id)
+    
+        (params,) = row
+    
+        params_obj = json.loads(params)
+    
+        method = params_obj['method']
+    
+        if method == 'hash':
+            assert_hash_password(user_id, password, params_obj)
+    
+        elif method == 'passphrase':
+            public_key_hash = params_obj['public_key_hash']
+            assert_passphrase_password(c, user_id, password, public_key_hash)
+    
+        else:
+            assert(False)
+    
+        (session_id, create_time, expire_time) = make_session_id(c, user_id)
+    
+        return {'user_id' : user_id,
+                'session_id' : session_id,
+                'create_time' : create_time,
+                'expire_time' : expire_time}
 
-    if row == None:
-        # raise ex.UnregisteredUserException(user_id)
-        # report bad password so people can't probe for user accounts.
+    except common_ex.SqueakException as e:
+        # always say bad password so they can't tell if
+        # an account exists or not or which password scheme
+        # they use.
         raise ex.BadPasswordException(user_id, password)
-
-    (params,) = row
-
-    params_obj = json.loads(params)
-
-    method = params_obj['method']
-
-    if method == 'no_password':
-        assert_no_password()
-
-    elif method == 'hash':
-        assert_hash_password(user_id, password, params_obj)
-
-    elif method == 'passphrase':
-        public_key_hash = params_obj['public_key_hash']
-        assert_passphrase_password(c, user_id, password, public_key_hash)
-
-    else:
-        assert(False)
-
-    (session_id, create_time, expire_time) = make_session_id(c, user_id)
-
-    return {'user_id' : user_id,
-            'session_id' : session_id,
-            'create_time' : create_time,
-            'expire_time' : expire_time}
         
 
 def sign_out(c, user_id, session_id):
@@ -1351,8 +1368,6 @@ def dump_local_database(c):
 
 
 # Node.
-# These requests are relayed to a node after the appropriate
-# cryptographic operations have been performed.
 
 def handle_connection_exceptions(fun, args):
 
@@ -1360,13 +1375,13 @@ def handle_connection_exceptions(fun, args):
         return fun(*args)
 
     except httplib.HTTPException as e:
-        raise ConnectionException(user_id, node_name, url, 'http', str(e))
+        raise ex.ConnectionException('http', str(e))
 
     except ssl.SSLError as e:
-        raise ConnectionException(user_id, node_name, url, 'ssl', str(e))
+        raise ex.ConnectionException('ssl', str(e))
 
     except IOError as e:
-        raise ConnectionException(user_id, node_name, url, 'socket', str(e))
+        raise ex.ConnectionException('socket', str(e))
 
 # complain.wsgi
 
@@ -1460,20 +1475,50 @@ def read_group_quota(c, user_id, session_id, node_name, group_id, owner_id, pass
 
 def create_group(c, user_id, session_id,
                  node_name, group_id,
+                 post_access, read_access, delete_access,
+                 posting_key_hash, reading_key_hash, delete_key_hash,
                  quota_allocated, when_space_exhausted,
-                 public_key_hash, passphrase=None):
+                 max_post_size,
+                 public_key_hash, passphrase):
 
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
     cl = client.Client(conn, real_node_name, show_traffic)
 
-    post_access, timestamp = load_local_group_access(c, user_id, group_id, user_id, node_name, 'post')
-    read_access, timestamp = load_local_group_access(c, user_id, group_id, user_id, node_name, 'read')
-    delete_access, timestamp = load_local_group_access(c, user_id, group_id, user_id, node_name, 'delete')
+    #post_access, timestamp = load_local_group_access(c, user_id, group_id, user_id, node_name, 'post')
+    #read_access, timestamp = load_local_group_access(c, user_id, group_id, user_id, node_name, 'read')
+    #delete_access, timestamp = load_local_group_access(c, user_id, group_id, user_id, node_name, 'delete')
 
-    posting_pub_key, posting_revoke_date = load_public_group_key(c, user_id, group_id, user_id, node_name, 'post')
-    reading_pub_key, reading_revoke_date = load_public_group_key(c, user_id, group_id, user_id, node_name, 'read')
-    delete_pub_key, delete_revoke_date = load_public_group_key(c, user_id, group_id, user_id, node_name, 'delete')
+    #posting_pub_key, posting_revoke_date = load_public_group_key(c, user_id, group_id, user_id, node_name, 'post')
+    #reading_pub_key, reading_revoke_date = load_public_group_key(c, user_id, group_id, user_id, node_name, 'read')
+    #delete_pub_key, delete_revoke_date = load_public_group_key(c, user_id, group_id, user_id, node_name, 'delete')
+
+    posting_pub_key = None
+    reading_pub_key = None
+    delete_pub_key = None
+
+    if posting_key_hash != None:
+        posting_pub_key, revoke_date = load_public_part_of_private_key(c, user_id, posting_key_hash)
+        update_local_group_key(c, user_id, group_id, user_id, node_name, 'post', posting_key_hash)
+    else:
+        delete_local_group_key_raw(c, user_id, group_id, user_id, node_name, 'post')
+
+
+    if reading_key_hash != None:
+        reading_pub_key, revoke_date = load_public_part_of_private_key(c, user_id, reading_key_hash)
+        update_local_group_key(c, user_id, group_id, user_id, node_name, 'read', reading_key_hash)
+    else:
+        delete_local_group_key_raw(c, user_id, group_id, user_id, node_name, 'read')
+
+    if delete_key_hash != None:
+        delete_pub_key, revoke_date = load_public_part_of_private_key(c, user_id, delete_key_hash)
+        update_local_group_key(c, user_id, group_id, user_id, node_name, 'delete', delete_key_hash)
+    else:
+        delete_local_group_key_raw(c, user_id, group_id, user_id, node_name, 'delete')
+
+    update_local_group_access(c, user_id, group_id, user_id, node_name, 'post', post_access, None)
+    update_local_group_access(c, user_id, group_id, user_id, node_name, 'read', read_access, None)
+    update_local_group_access(c, user_id, group_id, user_id, node_name, 'delete', delete_access, None)
 
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
@@ -1482,6 +1527,7 @@ def create_group(c, user_id, session_id,
                               post_access, read_access, delete_access,
                               posting_pub_key, reading_pub_key, delete_pub_key,
                               quota_allocated, when_space_exhausted,
+                              max_post_size,
                               key))
  
 def read_group(c, user_id, session_id, node_name, group_id, public_key_hash, passphrase=None):
@@ -1542,19 +1588,65 @@ def query_message_access(c, user_id, session_id, node_name, to_user, from_user_k
     resp = handle_connection_exceptions(
             cl.query_message_access, (to_user, user_id, from_key))
 
-    # print ('local.query_message_access.resp', resp)
-
     if resp['status'] == 'ok':
         message_access = resp['message_access'] # todo: handle KeyError
         access = message_access['access']
-        # print ('local.query_message_access.update_local_message_access', user_id, to_user, node_name, from_user_key_hash, access)
         update_local_message_access(c, user_id, to_user, node_name, from_user_key_hash, access)
 
-        #debug = debug_local_message_access(c, user_id)
-        #print ('query_message_access. local. after get', debug)
-        #assert(len(debug) > 0)
-
     return resp
+
+
+
+# max-message-size.wsgi
+
+
+def read_max_message_size(c, user_id, session_id, node_name, to_user, from_user_key_hash, passphrase=None):
+    assert_session_id(c, user_id, session_id)
+    conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    cl = client.Client(conn, real_node_name, show_traffic)
+    from_key = None
+    if from_user_key_hash != None:
+        from_key, revoke_date = load_user_key(c, user_id, node_name, from_user_key_hash, passphrase)
+
+    return handle_connection_exceptions(
+            cl.read_max_message_size, (to_user, user_id, from_key))
+
+
+def change_max_message_size(c, user_id, session_id, node_name, new_size, public_key_hash, passphrase=None):
+    assert_session_id(c, user_id, session_id)
+    conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    cl = client.Client(conn, real_node_name, show_traffic)
+
+    key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
+
+    return handle_connection_exceptions(
+            cl.change_max_message_size, (user_id, new_size, key))
+
+
+# max-post-size.wsgi
+
+
+def read_max_post_size(c, user_id, session_id, node_name, group_id, owner_id, passphrase=None):
+    assert_session_id(c, user_id, session_id)
+    conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    cl = client.Client(conn, real_node_name, show_traffic)
+
+    post_key, revoke_date = load_group_key(c, user_id, group_id, owner_id, node_name, 'post', passphrase)
+
+    return handle_connection_exceptions(
+            cl.read_max_post_size, (group_id, owner_id, post_key))
+
+
+def change_max_post_size(c, user_id, session_id, node_name, group_id, new_size,
+                         public_key_hash, passphrase=None):
+    assert_session_id(c, user_id, session_id)
+    conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    cl = client.Client(conn, real_node_name, show_traffic)
+
+    key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
+
+    return handle_connection_exceptions(
+            cl.change_max_post_size, (group_id, user_id, new_size, key))
 
 
 
@@ -1578,8 +1670,6 @@ def read_message_access(c, user_id, session_id, node_name, from_user_key_hash, p
 
 def set_message_access(c, user_id, session_id, node_name, from_user_key_hash, access, public_key_hash, passphrase=None):
 
-    # print ('set_message_access', user_id, session_id, node_name, from_user_key_hash, access, public_key_hash, passphrase)
-
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
     cl = client.Client(conn, real_node_name, show_traffic)
@@ -1588,10 +1678,7 @@ def set_message_access(c, user_id, session_id, node_name, from_user_key_hash, ac
     resp = handle_connection_exceptions(
             cl.set_message_access, (user_id, from_user_key_hash, access, key))
 
-    # print ('set_message_access.resp', resp)
-
     if resp['status'] == 'ok':
-        # print ('set_message_access.resp.status ok')
         update_local_message_access(c, user_id, user_id, node_name, from_user_key_hash, access)
 
     return resp
@@ -1620,8 +1707,9 @@ def delete_message_access(c, user_id, session_id, node_name, from_user_key_hash,
 # message-list.wsgi
 
 
-def read_message_list(c, user_id, session_id,
-                      node_name, start_time, end_time, max_records, order,
+def read_message_list(c, user_id, session_id, node_name,
+                      to_user_key, from_user, from_user_key,
+                      start_time, end_time, max_records, order,
                       public_key_hash, passphrase = None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
@@ -1629,7 +1717,9 @@ def read_message_list(c, user_id, session_id,
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
     return handle_connection_exceptions(
-            cl.read_message_list, (user_id, start_time, end_time, max_records, order, key))
+            cl.read_message_list, (user_id,
+                                   to_user_key, from_user, from_user_key,
+                                   start_time, end_time, max_records, order, key))
 
 
 
@@ -1694,12 +1784,55 @@ def validate_message_header(c, user_id, session_id, node_name, real_node_name,
         to_key, revoke_date = load_public_part_of_private_key(c, user_id, to_user_key_hash)
 
     if from_user_key_hash != None:
-        from_key, revoke_date, trust_score = load_other_user_key(c, user_id, from_user, node_name, from_user_key_hash)
+        #from_key, revoke_date, trust_score = load_other_user_key(c, user_id, from_user, node_name, from_user_key_hash)
+        from_key, revoke_date, trust_score = load_generic_user_key(c, user_id, from_user, node_name, from_user_key_hash)
         from_key.assert_signature(message_id, from_signature, 'from_signature')
 
     access, timestamp = load_local_message_access(c, user_id, user_id, node_name, from_user_key_hash)
     ut.assert_has_access(access, message_id, proof_of_work, 'message_id')
  
+
+# post validation
+
+def validate_post(c, user_id, session_id, node_name, real_node_name,
+        post_id, timestamp, group_id, owner_id,
+        data, data_hash,
+        post_signature, proof_of_work):
+
+    assert_session_id(c, user_id, session_id)
+
+    ut.assert_hash(data, data_hash, 'data_hash')
+
+    validate_post_header(c, user_id, session_id, node_name, real_node_name,
+            post_id, timestamp, group_id, owner_id,
+            data_hash,
+            post_signature, proof_of_work)
+
+
+def validate_post_header(c, user_id, session_id, node_name, real_node_name,
+        post_id, timestamp, group_id, owner_id, data_hash,
+        post_signature, proof_of_work):
+
+    assert_session_id(c, user_id, session_id)
+
+    post_id_string = ut.serialize_request(
+            ['MAKE_POST', timestamp, real_node_name,
+             group_id, owner_id,
+             data_hash])
+
+    ut.assert_hash(post_id_string, post_id, 'message_id')
+
+    post_key, revoke_date = load_public_group_key(c, user_id, group_id, owner_id, node_name, 'post')
+
+    if post_key != None:
+        post_key.assert_signature(post_id, post_signature, 'post_signature')
+
+    access, timestamp = load_local_group_access(c, user_id, group_id, owner_id, node_name, 'post')
+
+    access, timestamp = load_local_message_access(c, user_id, user_id, node_name, from_user_key_hash)
+    ut.assert_has_access(access, post_id, proof_of_work, 'post_id')
+ 
+
 
 
 # message.wsgi
@@ -1793,7 +1926,8 @@ def send_message(c, user_id, session_id,
     public_message = None
 
     if to_user_key_hash != None:
-        to_user_pub_key, revoke_date, trust_score = load_other_user_key(c, user_id, to_user, node_name, to_user_key_hash)
+        #to_user_pub_key, revoke_date, trust_score = load_other_user_key(c, user_id, to_user, node_name, to_user_key_hash)
+        to_user_pub_key, revoke_date, trust_score = load_generic_user_key(c, user_id, to_user, node_name, to_user_key_hash)
         public_message = to_user_pub_key.encrypt(message)
     elif force_encryption == True:
         raise ex.EncryptionForcedException('to_user_key_hash')
@@ -1878,7 +2012,49 @@ def read_post(c, user_id, session_id, node_name, group_id, owner_id, post_id, pa
             cl.read_post, (group_id, owner_id, post_id, read_key, pow_args))
 
     if resp['status'] != 'ok':
-        return resp
+        return resp, None
+
+    validation = None
+
+    try:
+        post_obj = get_required_parameter(resp, 'post', 'resp')
+
+        resp_post_id = get_required_parameter(resp, 'post_id', 'resp.post')
+        timestamp = get_required_parameter(resp, 'timestamp', 'resp.post')
+        resp_group_id = get_required_parameter(resp, 'group_id', 'resp.post')
+        resp_owner_id = get_required_parameter(resp, 'owner_id', 'resp.post')
+        data = get_required_parameter(resp, 'data', 'resp.post')
+        data_hash = get_required_parameter(resp, 'data_hash', 'resp.post')
+        post_signature = get_required_parameter(resp, 'post_signature', 'resp.post')
+        proof_of_work = get_required_parameter(resp, 'proof_of_work', 'resp.post')
+
+        if resp_post_id != post_id:
+            return resp, {'status': 'error',
+                          'reason': 'post_id does not match',
+                          'resp_post_id': resp_post_id,
+                          'post_id': post_id}
+
+        if resp_group_id != group_id:
+            return resp, {'status': 'error',
+                          'reason': 'group_id does not match',
+                          'resp_group_id': resp_group_id,
+                          'group_id': group_id}
+
+        if resp_owner_id != owner_id:
+            return resp, {'status': 'error',
+                          'reason': 'owner_id does not match',
+                          'resp_owner_id': resp_owner_id,
+                          'owner_id': owner_id}
+
+        validate_post(c, user_id, session_id, node_name, real_node_name,
+                post_id, timestamp, group_id, owner_id,
+                data, data_hash,
+                post_signature, proof_of_work)
+
+        validation = {'status' : 'ok'}
+
+    except common_ex.SqueakException as e:
+        validation = e.dict()
 
     if decrypt_post == True and read_key != None:
         post = get_required_parameter(resp, 'post', 'resp')
@@ -1886,7 +2062,7 @@ def read_post(c, user_id, session_id, node_name, group_id, owner_id, post_id, pa
         plaintext = read_key.decrypt(data)
         post['data'] = plaintext
 
-    return resp
+    return resp, validation
 
 
 def delete_post(c, user_id, session_id, node_name, group_id, owner_id, post_id, passphrase=None):
@@ -1925,6 +2101,16 @@ def read_user_quota(c, user_id, session_id, node_name, public_key_hash, passphra
             cl.read_user_quota, (user_id, key))
 
 
+# proxy/query-user.wsgi
+
+def query_user(c, user_id, session_id, node_name, other_user_id):
+    assert_session_id(c, user_id, session_id)
+    conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    cl = client.Client(conn, real_node_name, show_traffic)
+
+    return handle_connection_exceptions(
+            cl.query_user, (other_user_id,))
+
 
 # proxy/user.wsgi
 
@@ -1933,6 +2119,7 @@ def create_user(c, user_id, session_id,
                 node_name, public_key_hash,
                 default_message_access, when_mail_exhausted,
                 quota_size, mail_quota_size,
+                max_message_size,
                 user_class, auth_token):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
@@ -1943,6 +2130,7 @@ def create_user(c, user_id, session_id,
             cl.create_user, (user_id, pub_key, revoke_date,
                              default_message_access, when_mail_exhausted,
                              quota_size, mail_quota_size,
+                             max_message_size,
                              user_class, auth_token))
 
     set_local_default_message_access(c, user_id, user_id, node_name, default_message_access)
@@ -1970,6 +2158,18 @@ def delete_user(c, user_id, session_id, node_name, public_key_hash, passphrase=N
             cl.delete_user, (user_id, key))
 
     return resp
+
+
+# proxy/quota-available.wsgi
+
+def read_quota_available(c, user_id, session_id, node_name, user_class):
+    assert_session_id(c, user_id, session_id)
+    conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    cl = client.Client(conn, real_node_name, show_traffic)
+
+    return handle_connection_exceptions(
+            cl.read_quota_available, (user_class,))
+
 
 # proxy/version.wsgi
 

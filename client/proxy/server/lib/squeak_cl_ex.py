@@ -164,7 +164,7 @@ class KeyNotFoundException(SqueakClientException):
     def dict(self):
         return {'status' : 'error',
                 'error_code' : self.type,
-                'reason' : 'private key not found',
+                'reason' : 'key not found',
                 'user_id' : self.user_id,
                 'public_key_hash' : self.public_key_hash,
                 'key_class' : self.key_class}
@@ -172,10 +172,11 @@ class KeyNotFoundException(SqueakClientException):
 class KeyExistsException(SqueakClientException):
     type = ex.SqueakStatusCodes.conflict
 
-    def __init__(self, user_id, public_key_hash, key_class):
+    def __init__(self, user_id, public_key_hash, key_class, match):
         self.user_id = user_id
         self.public_key_hash = public_key_hash
         self.key_class = key_class
+        self.match = match
 
     def dict(self):
         return {'status' : 'error',
@@ -183,7 +184,8 @@ class KeyExistsException(SqueakClientException):
                 'reason' : 'key exists',
                 'user_id' : self.user_id,
                 'public_key_hash' : self.public_key_hash,
-                'key_class' : self.key_class}
+                'key_class' : self.key_class,
+                'match': self.match}
 
 class UnregisteredUserException(SqueakClientException):
     type = ex.SqueakStatusCodes.bad_request
@@ -255,10 +257,7 @@ class NodeAddrNotFoundException(SqueakClientException):
 class ConnectionException(SqueakClientException):
     type = ex.SqueakStatusCodes.server_error
 
-    def __init__(self, user_id, node_name, url, exception_type, exception_str):
-        self.user_id = user_id
-        self.node_name = node_name
-        self.url = url
+    def __init__(self, exception_type, exception_str):
         self.exception_type = exception_type
         self.exception_str = exception_str
 
@@ -266,9 +265,6 @@ class ConnectionException(SqueakClientException):
         return {'status' : 'error',
                 'error_code' : self.type,
                 'reason' : 'connection',
-                'user_id' : self.user_id,
-                'node_name' : self.node_name,
-                'url' : self.url,
                 'exception_type' : self.exception_type,
                 'exception_str' : self.exception_str}
 
@@ -356,6 +352,18 @@ class EncryptionForcedException(SqueakClientException):
                 'reason' : 'encryption forced',
                 'parameter' : self.parameter}
 
+
+class PrivateUserKeyNotAllowedException(SqueakClientException):
+    type = ex.SqueakStatusCodes.bad_request
+
+    def __init__(self, public_key_hash):
+        self.public_key_hash = public_key_hash
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type,
+                'reason' : 'private user key not allowed',
+                'public_key_hash' : self.public_key_hash}
 
 
 #SimpleBadPassphraseException = ex.SimpleBadPassphraseException

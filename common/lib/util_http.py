@@ -329,6 +329,9 @@ def get_optional(query_table, field):
 
 
 def get_required_cookie(simplecookie, cookie):
+    if simplecookie == None:
+        raise CookieRequiredResponse(cookie)
+
     try:
         return simplecookie[cookie].value
 

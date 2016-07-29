@@ -1,5 +1,7 @@
+<!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8">
 <title>
 Create Group
 </title>
@@ -173,6 +175,7 @@ function set_local_group_access(group_id, user_id, node_name, use, access, do_ne
 }
 
 
+/*
 function create_group() {
     var cookies = cookielib.parse(),
         user_id = cookies.user_id,
@@ -180,6 +183,7 @@ function create_group() {
         node_name = $('#node-name').val(),
         quota_allocated = $('#group-quota').val(),
         when_space_exhausted = $('#when-space-exhausted').val(),
+        max_post_size = $('#max-post-size').val(),
         public_key_hash = $('#user-key').val(),
         passphrase = null,
 
@@ -198,6 +202,7 @@ function create_group() {
                  group_id: group_id,
                  quota_allocated: quota_allocated,
                  when_space_exhausted: when_space_exhausted,
+                 max_post_size: max_post_size,
                  public_key_hash: public_key_hash,
                  passphrase: passphrase},
                 function(resp, textStatus) {
@@ -238,6 +243,61 @@ function create_group() {
     });
     });
     });
+}
+*/
+
+// It's all done in one request now.
+function create_group() {
+    var cookies = cookielib.parse(),
+        user_id = cookies.user_id,
+        group_id = $('#group-name').val(),
+        node_name = $('#node-name').val(),
+        quota_allocated = $('#group-quota').val(),
+        when_space_exhausted = $('#when-space-exhausted').val(),
+        max_post_size = $('#max-post-size').val(),
+        public_key_hash = $('#user-key').val(),
+        passphrase = null,
+
+        read_key = $('#read-key').val(),
+        post_key = $('#post-key').val(),
+        delete_key = $('#delete-key').val(),
+
+        read_access = read_access_select.value(),
+        post_access = post_access_select.value(),
+        delete_access = delete_access_select.value();
+
+    squeakclient.proxy.create_group(
+            {node_name: node_name,
+             group_id: group_id,
+             post_access: post_access,
+             read_access: read_access,
+             delete_access: delete_access,
+             posting_key_hash: post_key,
+             reading_key_hash: read_key,
+             delete_key_hash: delete_key,
+             quota_allocated: quota_allocated,
+             when_space_exhausted: when_space_exhausted,
+             max_post_size: max_post_size,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(JSON.stringify(resp));
+
+                if (resp.status === 'ok') {
+
+                    if (resp.resp.status === 'ok') {
+                        status_say('Group Created');
+                    } else if (resp.resp.status === 'error') {
+                        handle_error1(resp.resp, status_say);
+                    } else {
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error2(resp, status_say, 'user key', pass_dialog, create_group_);
+                } else {
+                }
+
+            });
 }
 
 window.onload = function() {
@@ -323,6 +383,12 @@ key: <span class="public-key-hash"></span>
 </select>
 </label>
 
+</div>
+
+<div>
+<label>Max Post Size:
+<input id="max-post-size"></input>
+</label>
 </div>
 
 

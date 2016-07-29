@@ -21,6 +21,7 @@ def post_handler(environ):
     when_mail_exhausted = ht.get_required(query, 'when_mail_exhausted')
     quota_size = ht.convert_int(ht.get_required(query, 'quota_size'), 'quota_size')
     mail_quota_size = ht.convert_int(ht.get_required(query, 'mail_quota_size'), 'mail_quota_size')
+    max_message_size = ht.convert_int(ht.get_optional(query, 'max_message_size'), 'max_message_size')
 
     # TODO: figure these out
     user_class = ht.get_optional(query, 'user_class')
@@ -32,7 +33,8 @@ def post_handler(environ):
         db.create_user(c, node_name,
                        user_id, key_type, public_key, public_key_hash, revoke_date,
                        default_message_access, when_mail_exhausted,
-                       db.root_quota_id, quota_size, mail_quota_size)
+                       db.root_quota_id, quota_size, mail_quota_size,
+                       max_message_size)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})
@@ -81,7 +83,8 @@ def delete_handler(environ):
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        db.delete_user(c, timestamp, node_name, user_id, public_key_hash, signature)
+        c2 = db.cursor(conn)
+        db.delete_user(c, c2, timestamp, node_name, user_id, public_key_hash, signature)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok'})

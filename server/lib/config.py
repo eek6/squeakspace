@@ -15,7 +15,7 @@ total_quota = 2*_gb
 path_root = '/home/eek6/.squeakspace/server'
 
 # seconds
-acceptable_future = -1
-acceptable_delay = 10
+acceptable_future = -1*1000
+acceptable_delay = 180*1000
 
 max_user_quota = 200*_mb

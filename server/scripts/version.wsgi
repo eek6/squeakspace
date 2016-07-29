@@ -1,15 +1,18 @@
 import util as ut
 import util_http as ht
 import db_sqlite3 as db
+import squeak_ex as ex
 
 def get_handler(environ):
-    global counter
-
     query = ht.parse_get_request(environ)
 
     node_name = ht.get_required(query, 'node_name')
 
-    version = db.read_version(node_name)
+    try:
+        version = db.read_version(node_name)
+
+    except ex.SqueakException as e:
+        raise ht.convert_squeak_exception(e)
 
     raise ht.ok_json(
             {'status' : 'ok',

@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>
+Account
+</title>
+
+<link rel="stylesheet" type="text/css" href="all.css">
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/cookielib-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/space/site-util.js"></script>
+<script type="text/javascript" src="/site/sq/space/postsmanager.js"></script>
+<script type="text/javascript" src="/lib/bin64.js"></script>
+<script type="text/javascript" src="/site/sq/space/data-to-url.js"></script>
+<script type="text/javascript" src="/site/sq/space/message-util.js"></script>
+<script type="text/javascript" src="/site/sq/space/file-loader.js"></script>
+<script type="text/javascript">
+
+params = querystring.load();
+cookies = cookielib.parse(document.cookie);
+
+kb = 1024;
+mb = kb*1024;
+gb = mb*1024;
+
+
+function say(mesg) {
+    $('#message').text(mesg);
+}
+
+function handle_error(resp) {
+    if (resp.reason === 'bad session id' ||
+        resp.reason === 'cookie required') {
+        window.location = 'login.html';
+    } else {
+        say(resp.reason);
+    }
+}
+
+
+function populate_quota_div(quota_div, quota_obj) {
+    quota_div.find('.used-div').find('.quota-bytes').text(quota_obj.quota_used);
+    quota_div.find('.allocated-div').find('.quota-bytes').text(quota_obj.quota_allocated);
+
+    quota_units_changed(quota_div.find('.allocated-div').find('.quota-units'));
+}
+
+function populate_with_ex_quota_div(quota_div, quota_obj) {
+    quota_div.find('.used-div').find('.quota-bytes').text(quota_obj.quota_used);
+    quota_div.find('.allocated-div').find('.quota-bytes').text(quota_obj.quota_allocated);
+    quota_div.find('.when-space-exhausted').val(quota_obj.when_space_exhausted);
+
+    quota_units_changed(quota_div.find('.allocated-div').find('.quota-units'));
+}
+
+function load_account() {
+    
+    var node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null;
+
+    squeakclient.proxy.read_user(
+            {node_name: node_name,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+
+                        var user = proxy_resp.user,
+                            user_id = user.user_id,
+                            default_key_hash = user.default_key_hash,
+                            user_quota = user.user_quota,
+                            mail_quota = user.mail_quota,
+                            num_keys = user.num_keys,
+                            default_message_access = user.default_message_access,
+                            max_message_size = user.max_message_size,
+                            last_message_time = user.last_message_time,
+                            last_timestamp = user.last_timestamp,
+                            message_access_list = user.message_access_list,
+                            groups_list = user.groups_list;
+
+                        populate_quota_div($('#user-quota-div'), user_quota);
+                        populate_with_ex_quota_div($('#mail-quota-div'), mail_quota);
+
+                        var groups_div = $('#groups-div'),
+                            loader = new LoadGroupsTransaction(groups_list, groups_div);
+
+                        groups_div.children().remove();
+
+                        loader.start();
+                    } else if (proxy_resp.status === 'error') {
+                        handle_error(proxy_resp);
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+function delete_button() {
+    $('#delete-confirm-div').show();
+}
+
+function cancel_delete() {
+    $('#delete-confirm-div').hide();
+}
+
+function delete_account() {
+
+    var node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null;
+
+    squeakclient.proxy.delete_user(
+            {node_name: node_name,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        $('#account-deleted-div').show();
+                        $('#main-div').hide();
+                        $('#inbox-link').hide();
+                    } else if (proxy_resp.status === 'error') {
+                        handle_error(proxy_resp);
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+
+function quota_changed(input) {
+    var div = input.parent(),
+        units = div.find('.quota-units').val(),
+        quota_bytes = div.find('.quota-bytes'),
+        quota_val = div.find('.quota-input').val(),
+        quota_val_num = parseFloat(quota_val),
+        quota_bytes_val = null;
+
+    if (isNaN(quota_val_num)) {
+        return;
+    }
+
+    if (units === 'gb') {
+        quota_bytes_val = quota_val_num*gb;
+    } else if (units === 'mb') {
+        quota_bytes_val = quota_val_num*mb;
+    } else if (units === 'kb') {
+        quota_bytes_val = quota_val_num*kb;
+    } else if (units === 'bytes') {
+        quota_bytes_val = quota_val_num;
+    } 
+
+    quota_bytes.text(quota_bytes_val);
+}
+
+function quota_units_changed(select) {
+    var allocated_div = select.parent(),
+        div = allocated_div.parent(),
+        used_div = div.find('.used-div'),
+        units = select.val(),
+        quota_bytes_text = allocated_div.find('.quota-bytes').text(),
+        quota_used_bytes_text = used_div.find('.quota-bytes').text(),
+        quota_input = allocated_div.find('.quota-input'),
+        quota_used_span = used_div.find('.quota-used'),
+        quota_bytes = parseFloat(quota_bytes_text),
+        quota_used_bytes = parseFloat(quota_used_bytes_text),
+        quota_val = null,
+        quota_used_val = null;
+
+    if (isNaN(quota_bytes) || isNaN(quota_used_bytes)) {
+        return;
+    }
+
+    if (units === 'gb') {
+        quota_val = quota_bytes/gb;
+        quota_used_val = (quota_used_bytes/gb) + ' GB';
+    } else if (units === 'mb') {
+        quota_val = quota_bytes/mb;
+        quota_used_val = (quota_used_bytes/mb) + ' MB';
+    } else if (units === 'kb') {
+        quota_val = quota_bytes/kb;
+        quota_used_val = (quota_used_bytes/kb) + ' KB';
+    } else if (units === 'bytes') {
+        quota_val = quota_bytes;
+        quota_used_val = (quota_used_bytes) + ' bytes';
+    }
+
+    quota_input.val(quota_val);
+    quota_used_span.text(quota_used_val);
+}
+
+
+function get_quota(div) {
+    var units = div.find('.quota-units').val(),
+        quota_val = div.find('.quota-input').val(),
+        message_span = div.find('.message'),
+        quota_val_num = parseFloat(quota_val),
+        quota_bytes = null;
+
+    if (isNaN(quota_val_num)) {
+        message_span.text('Quota allocated must be a number');
+        return null;
+    } else {
+        message_span.text('');
+    }
+
+    if (units === 'gb') {
+        quota_bytes = quota_val_num*gb;
+    } else if (units === 'mb') {
+        quota_bytes = quota_val_num*mb;
+    } else if (units === 'kb') {
+        quota_bytes = quota_val_num*kb;
+    } else if (units === 'bytes') {
+        quota_bytes = quota_val_num;
+    }
+
+    quota_bytes = Math.floor(quota_bytes);
+
+    return quota_bytes;
+}
+
+function set_group_quota(button) {
+    var allocated_div = button.parent(),
+        quota_div = allocated_div.parent(),
+        group_div = quota_div.parent(),
+        message_span = quota_div.find('.message'),
+        new_quota = get_quota(quota_div),
+
+        node_name = params.node,
+        group_id = group_div.find('.hidden-group-name').text(),
+        when_space_exhausted = quota_div.find('.when-space-exhausted').val(),
+        public_key_hash = params.key,
+        passphrase = null;
+
+    if (new_quota !== null) {
+
+        squeakclient.proxy.change_group_quota(
+                {node_name: node_name,
+                 group_id: group_id,
+                 new_size: new_quota,
+                 when_space_exhausted: when_space_exhausted,
+                 public_key_hash: public_key_hash,
+                 passphrase: passphrase},
+                function(resp, textStatus) {
+                    debug(resp);
+
+                    if (resp.status === 'ok') {
+                        var proxy_resp = resp.resp;
+
+                        if (proxy_resp.status === 'ok') {
+                            message_span.text('Quota set.');
+                        } else if (proxy_resp.status === 'error') {
+                            if (proxy_resp.reason === 'quota exceeded') {
+                                message_span.text('Quota allocated is too large.');
+                            } else {
+                                handle_error(proxy_resp);
+                            }
+                        }
+
+                    } else if (resp.status === 'error') {
+                        handle_error(resp);
+                    }
+                });
+    }
+}
+
+function set_user_quota(button) {
+    var quota_div = button.parent(),
+        message_span = quota_div.find('.message'),
+        new_quota = get_quota(quota_div),
+
+        node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null,
+        
+        user_class = null,
+        auth_token = null;
+
+    if (new_quota !== null) {
+
+        squeakclient.proxy.change_user_quota(
+                {node_name: node_name,
+                 new_size: new_quota,
+                 user_class: user_class,
+                 auth_token: auth_token,
+                 public_key_hash: public_key_hash,
+                 passphrase: passphrase},
+                function(resp, textStatus) {
+                    debug(resp);
+
+                    if (resp.status === 'ok') {
+                        var proxy_resp = resp.resp;
+
+                        if (proxy_resp.status === 'ok') {
+                            message_span.text('Quota set.');
+                            load_account();
+                        } else if (proxy_resp.status === 'error') {
+                            if (proxy_resp.reason === 'user quota too large') {
+                                message_span.text('Quota allocated is too large.');
+                            } else if (proxy_resp.reason === 'quota cannot shrink') {
+                                message_span.text('Quota allocated is smaller than quota used.');
+                            } else {
+                                handle_error(proxy_resp);
+                            }
+                        }
+
+                    } else if (resp.status === 'error') {
+                        handle_error(resp);
+                    }
+                });
+    }
+}
+
+
+function set_mail_quota(button) {
+    var quota_div = button.parent(),
+        message_span = quota_div.find('.message'),
+        new_quota = get_quota(quota_div),
+        when_space_exhausted = quota_div.find('.when-space-exhausted').val(),
+
+        node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null;
+
+    if (new_quota !== null) {
+
+        squeakclient.proxy.change_message_quota(
+                {node_name: node_name,
+                 new_size: new_quota,
+                 when_space_exhausted: when_space_exhausted,
+                 public_key_hash: public_key_hash,
+                 passphrase: passphrase},
+                function(resp, textStatus) {
+                    debug(resp);
+
+                    if (resp.status === 'ok') {
+                        var proxy_resp = resp.resp;
+
+                        if (proxy_resp.status === 'ok') {
+                            message_span.text('Quota set.');
+                            load_account();
+                        } else if (proxy_resp.status === 'error') {
+                            if (proxy_resp.reason === 'quota exceeded') {
+                                message_span.text('Quota allocated is too large.');
+                            } else if (proxy_resp.reason === 'quota cannot shrink') {
+                                message_span.text('Quota allocated is smaller than quota used.');
+                            } else {
+                                handle_error(proxy_resp);
+                            }
+                        }
+
+                    } else if (resp.status === 'error') {
+                        handle_error(resp);
+                    }
+                });
+    }
+}
+
+function delete_group_button(button) {
+    var confirm_div = button.next();
+
+    confirm_div.show();
+}
+
+function delete_group_cancel(button) {
+    var confirm_div = button.parent();
+
+    confirm_div.hide();
+}
+
+function delete_group(button) {
+    var confirm_div = button.parent(),
+        header_div = confirm_div.parent(),
+        group_div = header_div.parent(),
+        group_id = group_div.find('.hidden-group-name').text(),
+        
+        node_name = params.node,
+        public_key_hash = params.key,
+        passphrase = null;
+
+    squeakclient.proxy.delete_group(
+            {node_name: node_name,
+             group_id: group_id,
+             public_key_hash: public_key_hash,
+             passphrase: passphrase},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var proxy_resp = resp.resp;
+
+                    if (proxy_resp.status === 'ok') {
+                        group_div.remove();
+                    } else if (proxy_resp.status === 'error') {
+                        handle_error(proxy_resp);
+                    }
+
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+
+function populate_group_div(group_div, group_data) {
+
+    var group_id = group_data.group_id,
+        owner_id = group_data.owner_id,
+        post_access = group_data.post_access,
+        read_access = group_data.read_access,
+        delete_access = group_data.delete_access,
+        posting_key_type = group_data.posting_key_type,
+        posting_pub_key = group_data.posting_pub_key,
+        reading_key_type = group_data.reading_key_type,
+        reading_pub_key = group_data.reading_pub_key,
+        delete_key_type = group_data.delete_key_type,
+        delete_pub_key = group_data.delete_pub_key,
+        quota = group_data.quota,
+        max_post_size = group_data.max_post_size,
+        last_post_time = group_data.last_post_time;
+
+    var node_name = params.node,
+        group_str = group_string(node_name, owner_id, group_id),
+        group_link = 'group.html?' + $.param({node: node_name, owner: owner_id, group: group_id});
+
+    group_div.find('.quota-units').val('mb');
+    group_div.find('.hidden-group-name').text(group_data.group_id);
+    group_div.find('.group-link').text(group_str).attr('href', group_link);
+    populate_with_ex_quota_div(group_div.find('.quota-div'), quota);
+}
+
+function LoadGroupsTransaction(group_id_list, groups_div) {
+    this.group_id_list = group_id_list;
+    this.groups_div = groups_div;
+
+    this.node_name = params.node;
+    this.owner_id = cookies.user_id;
+    this.public_key_hash = params.key;
+    this.passphrase = null;
+}
+
+LoadGroupsTransaction.prototype.start = function() {
+    this.step(0);
+};
+
+LoadGroupsTransaction.prototype.step = function(i) {
+    var trans = this;
+
+    if (i < trans.group_id_list.length) {
+
+        var group_id = trans.group_id_list[i];
+
+        squeakclient.proxy.read_group(
+                {node_name: trans.node_name,
+                 group_id: group_id,
+                 public_key_hash: trans.public_key_hash,
+                 passphrase: trans.passphrase},
+                function(resp, textStatus) {
+                    debug(resp);
+
+                    if (resp.status === 'ok') {
+                        var proxy_resp = resp.resp;
+
+                        if (proxy_resp.status === 'ok') {
+                            var group_obj = proxy_resp.group,
+                                group_div = $('#templates').find('.group-div').clone();
+
+                            populate_group_div(group_div, group_obj);
+
+                            trans.groups_div.append(group_div);
+
+                            trans.step(i + 1);
+
+                        } else if (proxy_resp.status === 'error') {
+                            handle_error(proxy_resp);
+                        }
+
+                    } else if (resp.status === 'error') {
+                        handle_error(resp);
+                    }
+                });
+    } else {
+        trans.done();
+    }
+};
+
+LoadGroupsTransaction.prototype.done = function() {
+};
+
+window.onload = function() {
+    var node_name = params.node,
+        user_id = cookies.user_id,
+        public_key_hash = params.key,
+        user_str = user_string(node_name, user_id);
+
+    $('#inbox-link').attr('href', 'inbox.html?' + $.param({node: node_name, key: public_key_hash}));
+    $('#user-string').text(user_str);
+
+    $('.quota-units').val('mb');
+
+    document.title = 'Account: ' + user_str;
+
+    load_account();
+};
+
+
+</script>
+</head>
+<body>
+
+<div id="templates" style="display:none;">
+
+    <div class="group-div">
+        <div class="hidden-group-name" style="display:none;">
+        </div>
+        <div class="header-div">
+            <a class="group-link"></a> <button onclick="delete_group_button($(this));">Delete</button>
+            <div class="delete-confirm-div" style="display:none;">
+                <div>
+                    Are you sure you want to delete this group?
+                    This action cannot be undone.
+                </div>
+                <button onclick="delete_group($(this));">Yes</button>
+                <button onclick="delete_group_cancel($(this));">No</button>
+            </div>
+        </div>
+        <div class="quota-div">
+            <div class="used-div">
+                <span>Used: </span>
+                <span class="quota-used"></span>
+                <span class="quota-bytes" style="display:none;"></span>
+            </div>
+            <div class="allocated-div">
+                <span>Allocated: </span>
+                <input class="quota-input" onchange="quota_changed($(this));">
+                <select class="quota-units" onchange="quota_units_changed($(this));">
+                    <option value="bytes">bytes</option>
+                    <option value="kb">KB</option>
+                    <option value="mb">MB</option>
+                    <option value="gb">GB</option>
+                </select><br/>
+                <span>When Space Exhausted: </span>
+                <select class="when-space-exhausted">
+                    <option value="block">Block New Content</option>
+                    <option value="free_oldest">Free Oldest Content</option>
+                </select>
+                <span class="quota-bytes" style="display:none;"></span>
+                <button onclick="set_group_quota($(this));">Set</button>
+                <span class="message"></span>
+            </div>
+        </div>
+    </div>
+
+</div> <!-- end templates -->
+
+
+<div>
+<span>Account: <span id="user-string"></span></span>
+<a href="home.html">Home</a>
+<a id="inbox-link" href="#">Inbox</a>
+</div>
+
+<div id="account-deleted-div" style="display:none;">
+    Account Deleted
+</div>
+
+<div id="main-div">
+
+    <!-- Deleting individual node accounts is disabled for now.
+    <div>
+        <button onclick="delete_button();">Delete Account</button>
+        <div id="delete-confirm-div" style="display:none;">
+            <span>
+                Are you sure you want to delete your account? This
+                action cannot be undone.
+            </span>
+            <button onclick="delete_account();">Yes</button>
+            <button onclick="cancel_delete();">No</button>
+        </div>
+    </div>
+    -->
+
+    <div id="user-quota-div" class="quota-div">
+        <span>User Quota:</span>
+
+        <div class="used-div">
+            <span>Used: </span>
+            <span class="quota-used"></span>
+            <span class="quota-bytes" style="display:none;"></span>
+        </div>
+
+        <div class="allocated-div">
+            <span>Allocated: </span>
+            <input class="quota-input" onchange="quota_changed($(this));">
+            <select class="quota-units" onchange="quota_units_changed($(this));">
+                <option value="bytes">bytes</option>
+                <option value="kb">KB</option>
+                <option value="mb">MB</option>
+                <option value="gb">GB</option>
+            </select>
+            <span class="quota-bytes" style="display:none;"></span>
+            <button onclick="set_user_quota($(this));">Set</button>
+            <span class="message"></span>
+        </div>
+    </div>
+
+    <div id="mail-quota-div" class="quota-div">
+        <span>Mail Quota:</span>
+
+        <div class="used-div">
+            <span>Used: </span>
+            <span class="quota-used"></span>
+            <span class="quota-bytes" style="display:none;"></span>
+        </div>
+
+        <div class="allocated-div">
+            <span>Allocated: </span>
+            <input class="quota-input" onchange="quota_changed($(this));">
+            <select class="quota-units" onchange="quota_units_changed($(this));">
+                <option value="bytes">bytes</option>
+                <option value="kb">KB</option>
+                <option value="mb">MB</option>
+                <option value="gb">GB</option>
+            </select><br/>
+            <span>When Space Exhausted: </span>
+            <select class="when-space-exhausted">
+                <option value="block">Block New Content</option>
+                <option value="free_oldest">Free Oldest Content</option>
+            </select>
+            <span class="quota-bytes" style="display:none;"></span>
+            <button onclick="set_mail_quota($(this));">Set</button>
+            <span class="message"></span>
+        </div>
+    </div>
+
+    <div>
+        <span>Groups:</span>
+        <div id="groups-div">
+        </div>
+    </div>
+
+</div>
+
+
+<div>
+<span id="message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>
+Compose
+</title>
+
+<link rel="stylesheet" type="text/css" href="all.css">
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/cookielib-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/space/site-util.js"></script>
+<script type="text/javascript" src="/lib/bin64.js"></script>
+<script type="text/javascript" src="/site/sq/space/file-loader.js"></script>
+
+<script type="text/javascript" src="/site/sq/space/data-to-url.js"></script>
+<script type="text/javascript" src="/site/sq/space/message-util.js"></script>
+<script type="text/javascript">
+
+params = querystring.load();
+cookies = cookielib.parse(document.cookie);
+
+FileLoader = get_FileLoader();
+DataToUrl = get_DataToURL();
+
+function say(mesg) {
+    $('#message').text(mesg);
+}
+
+function handle_error(resp) {
+    if (resp.reason === 'bad session id' ||
+        resp.reason === 'cookie required') {
+        window.location = 'login.html';
+    } else {
+        say(resp.reason);
+    }
+}
+
+// disable debug printing here because messages are sometimes too large.
+debug = function(obj) {
+};
+
+
+function load_from_list() {
+
+    var from_list = $('#from-list'),
+        user_id = cookies.user_id;
+
+    squeakclient.local.list_user_keys(
+            {},
+            function(resp, textStatus) {
+                debug(resp);
+
+                if (resp.status === 'ok') {
+                    var keys = resp.keys,
+                        length = keys.length,
+                        i = 0;
+
+                    for ( ; i < length; i++ ) {
+                        var key = keys[i],
+                            node_name = key.node_name,
+                            public_key_hash = key.public_key_hash,
+                            visible_value = user_string(node_name, user_id) + ' ' + public_key_hash,
+                            value = JSON.stringify([node_name, public_key_hash]);
+
+                        from_list.append($('<option>').val(value).append(visible_value));
+                    }
+                } else if (resp.status === 'error') {
+                    handle_error(resp);
+                }
+            });
+}
+
+function ComposeTransaction() {
+    var trans = this;
+
+    trans.to_node = params.node,
+    trans.to_user = params.user,
+    trans.to_key = params.key,
+    trans.message_text = $('#message-text').val(),
+    trans.from_user = null;
+    trans.from_user_str = $('#from-select').val(),
+    trans.from_node = null,
+    trans.from_key_hash = null,
+    trans.from_key_passphrase = null,
+    trans.public_signature_ok = $('#public-signature-ok').prop('checked'),
+    trans.message_obj = null,
+    trans.timestamp = get_timestamp(),
+    trans.message_obj = [];
+
+    trans.file_input = $('#file-input')[0];
+
+    trans.message_obj.push(['to', trans.to_node, trans.to_user, trans.to_key]);
+
+    if (trans.from_user_str !== '') {
+        var from_user_obj = JSON.parse(trans.from_user_str);
+
+        trans.from_node = from_user_obj[0],
+        trans.from_user = cookies.user_id,
+        trans.from_key_hash = from_user_obj[1];
+
+        trans.message_obj.push(['from', trans.from_node, trans.from_user, trans.from_key_hash]);
+    }
+
+    trans.message_obj.push(['time', trans.timestamp]);
+    trans.message_obj.push(['message', trans.message_text]);
+
+    trans.file_loader = null;
+    trans.builder = null;
+    trans.message_str = null;
+    trans.sender = null;
+}
+
+ComposeTransaction.prototype.start = function() {
+    say('');
+
+    if (this.file_input.files.length === 0) {
+        this.build_message();
+    } else if (FileLoader === null) {
+        say('File loading is not supported.');
+    } else {
+        this.load_files();
+    }
+};
+
+ComposeTransaction.prototype.load_files = function() {
+    var trans = this,
+        handlers = {
+            done: function(values) {
+                trans.message_obj.push(['files', values]);
+                trans.build_message();
+            },
+            error: function(i, err) {
+                say('Error encountered while loading attachment ' + i);
+                alert(JSON.stringify(err));
+            }
+        };
+
+    trans.file_loader = new FileLoader(trans.file_input, handlers);
+    trans.file_loader.start();
+};
+
+ComposeTransaction.prototype.build_message = function() {
+    var trans = this;
+
+    trans.builder = new MessageConstructor(
+            trans.from_key_hash,
+            trans.from_key_passphrase,
+            trans.message_obj,
+            {
+                state_changed: function(new_state) {
+                    $('#message-constructor-state').text(new_state);
+                },
+                debug: debug,
+                error: handle_error,
+                done: function(message_str) {
+                    trans.message_str = message_str;
+                    trans.send();
+                }
+            });
+
+    trans.builder.start();
+};
+
+ComposeTransaction.prototype.send = function() {
+    var trans = this,
+        handlers = {
+            state_changed: function(new_state) {
+                $('#send-message-state').text(new_state);
+            },
+            debug: debug,
+            error: handle_error,
+            proxy_error: handle_error,
+            blocked: function() {
+                say('Message Blocked');
+            },
+            sent: function(message_id, timestamp, message_hash, from_signature, proof_of_work) {
+                say('Message Sent: ' + message_id);
+            },
+            ask_from_sig: function(callback) {
+                trans.signed_mail_required(callback);
+            }
+        };
+    trans.sender = new SendMessageTransaction(trans.to_node, trans.to_user, trans.to_key,
+                                              trans.message_str, handlers);
+
+    trans.sender.start();
+};
+
+
+ComposeTransaction.prototype.signed_mail_required = function(callback) {
+    $('#signed-mail-div').show();
+
+    if (trans.public_signature_ok) {
+
+        if (trans.from_user_key_hash === null) {
+            say('From cannot be Anonymous');
+        } else {
+            callback(trans.from_user_key_hash, trans.from_user_key_passphrase);
+        }
+
+    } else {
+        say('Anonymous messaging blocked. Public signature required.');
+    }
+}
+
+function send_button() {
+    var trans = new ComposeTransaction();
+
+    trans.start();
+}
+
+
+/*
+function load_files() {
+    var file_input = $('#file-input')[0],
+        files_array = file_input.files,
+        i = 0,
+        length = files_array.length,
+        files_div = $('#files-div');
+
+    for ( ; i < length; i++ ) {
+        var file = files_array[i],
+            url = URL.createObjectURL(file);
+
+        files_div.append($('<a>').attr('href', url).text('click'));
+    }
+}
+*/
+
+/*
+function load_files() {
+    var file_input = $('#file-input')[0],
+        handlers = {
+            error: function() {
+                alert('error');
+            },
+            done: function(files_array) {
+                post_files(files_array);
+            }
+        },
+        loader = new FileLoader(file_input, handlers);
+
+    loader.start();
+}
+
+function post_files(files_array) {
+    var files_div = $('#files-div'),
+        i = 0,
+        length = files_array.length;
+
+    for ( ; i < length; i++ ) {
+        var file_obj = files_array[i],
+            mime_type = file_obj[0],
+            mime_split = mime_type.split('/'),
+            b64_data = file_obj[1],
+            div_maker = mime_to_div_table[mime_split[0]];
+
+        if (DataToUrl === null) {
+            files_div.append($('<div>').text('Attachment loading not supported'));
+        } else if (div_maker === undefined) {
+            files_div.append($('<div>').text('Mime type unsupported: ' + mime_type));
+        } else {
+            files_div.append(div_maker(mime_type, b64_data));
+        }
+    }
+}
+*/
+
+
+window.onload = function() {
+    var node_name = params.node,
+        to_user = params.user,
+        to_key = params.key;
+
+    if (node_name !== undefined &&
+        to_user !== undefined &&
+        to_key !== undefined) {
+
+        var to_string = user_string(node_name, to_user);
+        document.title = 'Compose: ' + to_string;
+        $('.to-user').text(to_string);
+        $('.to-key').text(to_key);
+
+        $('#contact-link').attr('href', 'contact.html?' + $.param(params));
+    } else {
+        say('Bad Parameters');
+    }
+
+    $('#public-signature-ok').prop('checked', false);
+    load_from_list();
+}
+
+</script>
+</head>
+<body>
+
+<div>
+<span>Compose</span>
+<a href="home.html">Home</a>
+<a id="contact-link" href="#">Contact</a>
+</div>
+
+<div>
+<span>To: <span class="to-user"></span> <span class="to-key"></span></span>
+</div>
+
+<div>
+<label>From:
+<select id="from-select">
+<option value="">Anonymous</option>
+<optgroup id="from-list"></optgroup>
+</select>
+</label>
+</div>
+
+<div id="signed-mail-div" style="display:none;">
+<span><span class="to-user"></span>
+does not accept anonymous mail. 
+Are you ok with publicly signing
+your encrypted message?</span><br/>
+<label>Publicly Sign Encrypted Message
+<input id="public-signature-ok" type="checkbox">
+</label>
+</div>
+
+<div>
+<label>Message: <br/>
+<textarea id="message-text"></textarea>
+</div>
+
+<div>
+<label>Attach Files:
+<input id="file-input" type="file" multiple>
+</label>
+<!--
+<button onclick="load_files();">Load</button>
+<div id="files-div">
+</div>
+-->
+</div>
+
+<div>
+<button onclick="send_button();">Send</button>
+</div>
+
+<div>
+<span>Message Constructor State: <span id="message-constructor-state"></span></span>
+</div>
+
+<div>
+<span>Send Message State: <span id="send-message-state"></span></span>
+</div>
+
+<div>
+<span id="message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+
+</body>
+</html>

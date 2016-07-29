@@ -38,6 +38,7 @@ Alf = tp.User(
         when_mail_exhausted='block',
         quota_size=100*1024*1024,
         mail_quota_size=10*1024*1024,
+        max_message_size=None,
         user_class=None,
         auth_token=None)
 
@@ -83,7 +84,6 @@ assert(message['message'] == mess)
 assert(message['message_id'] == mess_id)
 client.assert_integrity(True)
 
-
 resp = client.delete_message(Alf.user_id, mess_id, Alf.key)
 assert(resp['status'] == 'ok')
 client.assert_integrity(True)
@@ -92,6 +92,7 @@ client.assert_integrity(True)
 resp = client.read_message(Alf.user_id, mess_id, Alf.key)
 assert(resp['status'] == 'error')
 assert(resp['reason'] == 'unknown message')
+
 
 resp = Alf.delete(client)
 assert(resp['status'] == 'ok')

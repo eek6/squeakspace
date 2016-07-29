@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>
+Contact
+</title>
+
+<link rel="stylesheet" type="text/css" href="all.css">
+
+<script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
+<script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/cookielib-0.0.0.js"></script>
+<script type="text/javascript" src="/site/sq/space/site-util.js"></script>
+<script type="text/javascript">
+
+params = querystring.load();
+cookies = cookielib.parse(document.cookie);
+
+function say(mesg) {
+    $('#message').text(mesg);
+}
+
+
+function handle_error(resp) {
+    if (resp.reason === 'bad session id' ||
+        resp.reason === 'cookie required') {
+        window.location = 'login.html';
+    } else {
+        say(resp.reason);
+    }
+}
+
+function delete_button() {
+    $('#confirm-delete-div').show();
+}
+
+function cancel_delete() {
+    $('#confirm-delete-div').hide();
+}
+
+// handlers = {state_changed, debug, error, done}
+DeleteContactTransaction = function(node_name, user_id, public_key_hash, handlers) {
+    this.node_name = node_name;
+    this.user_id = user_id;
+    this.public_key_hash = public_key_hash;
+
+    this.handlers = handlers;
+    handlers.state_changed = handlers.state_changed || function(x) {};
+    handlers.debug = handlers.debug || function(x) {};
+    handlers.error = handlers.error || function(x) {};
+    handlers.done = handlers.done || function() {};
+
+    this.state = null;
+};
+
+DeleteContactTransaction.prototype.change_state = function(new_state) {
+    this.state = new_state;
+    this.handlers.state_changed(new_state);
+};
+
+DeleteContactTransaction.prototype.start = function() {
+    this.change_state('start');
+    this.delete_other_user_key();
+};
+
+DeleteContactTransaction.prototype.delete_other_user_key = function() {
+    var trans = this;
+    trans.change_state('delete_other_user_key');
+
+    squeakclient.local.delete_other_user_key(
+            {other_user_id: trans.user_id,
+             node_name: trans.node_name,
+             public_key_hash: trans.public_key_hash},
+            function(resp, textStatus) {
+                trans.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    trans.delete_public_key();
+                } else if (resp.status === 'error') {
+                    trans.handlers.error(resp);
+                }
+            });
+};
+
+DeleteContactTransaction.prototype.delete_public_key = function() {
+    var trans = this;
+    trans.change_state('delete_public_key');
+
+    squeakclient.local.delete_public_key(
+            {public_key_hash: trans.public_key_hash},
+            function(resp, textStatus) {
+                trans.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    trans.done();
+                } else if (resp.status === 'error') {
+                    trans.handlers.error(resp);
+                }
+            });
+};
+
+DeleteContactTransaction.prototype.done = function() {
+    this.change_state('done');
+    this.handlers.done();
+};
+
+
+function delete_contact() {
+
+    var node_name = params.node,
+        user_id = params.user,
+        public_key_hash = params.key,
+        trans = new DeleteContactTransaction(
+                node_name, user_id, public_key_hash,
+                {state_changed: function(new_state) {
+                    $('#state').text(new_state);
+                 },
+                 debug: debug,
+                 error: handle_error,
+                 done: function() {
+                    say('Contact Deleted');
+                    window.location = 'home.html';
+                 }});
+
+    trans.start();
+}
+
+//
+// handlers = {state_changed(new_state),
+//             debug(str),
+//             error(resp),
+//             key_missing(key_hash),
+//             user_key_missing(node_name, user_id, key_hash),
+//             ok(node_name, user_id, key_hash)}
+//
+function CheckContactTransaction(node_name, user_id, key_hash, self_user_id, handlers) {
+
+    this.node_name = node_name;
+    this.user_id = user_id;
+    this.key_hash = key_hash;
+    this.self_user_id = self_user_id;
+
+    this.trust_score = null;
+
+    this.handlers = handlers;
+    
+    handlers.state_changed = handlers.state_changed || function(x) {};
+    handlers.debug = handlers.debug || function(x) {};
+    handlers.error = handlers.error || function(x) {};
+}
+
+CheckContactTransaction.prototype.change_state = function(new_state) {
+    this.state = new_state;
+    this.handlers.state_changed(new_state);
+};
+
+CheckContactTransaction.prototype.start = function() {
+    this.change_state('start');
+    this.check_public_key();
+};
+
+CheckContactTransaction.prototype.check_public_key = function() {
+    var trans = this;
+    trans.change_state('check_public_key');
+
+    squeakclient.local.read_public_key(
+            {public_key_hash: trans.key_hash},
+            function(resp, textStatus) {
+                trans.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    trans.check_user_key();
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'key not found') {
+                        if (trans.user_id === trans.self_user_id) {
+                            trans.check_private_key();
+                        } else {
+                            trans.key_missing();
+                        }
+                    } else {
+                        trans.handlers.error(resp);
+                    }
+                }
+            });
+};
+
+CheckContactTransaction.prototype.check_private_key = function() {
+    var trans = this;
+    trans.change_state('check_private_key');
+
+    squeakclient.local.read_private_key(
+            {public_key_hash: trans.key_hash,
+             only_public_part: true,
+             allow_private_user_key: false},
+            function(resp, textStatus) {
+                trans.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    trans.check_self_user_key();
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'key not found') {
+                        trans.key_missing();
+                    } else {
+                        trans.handlers.error(resp);
+                    }
+                }
+            });
+};
+
+CheckContactTransaction.prototype.check_user_key = function() {
+    var trans = this;
+    trans.change_state('check_user_key');
+
+    squeakclient.local.read_other_user_key(
+            {other_user_id: trans.user_id,
+             node_name: trans.node_name,
+             public_key_hash: trans.key_hash},
+            function(resp, textStatus) {
+                trans.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    trans.trust_score = resp.key.trust_score;
+                    trans.ok();
+
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'user key not found') {
+                        if (trans.user_id === trans.self_user_id) {
+                            trans.check_self_user_key();
+                        } else {
+                            trans.user_key_missing();
+                        }
+                    } else {
+                        trans.handlers.error(resp);
+                    }
+                }
+            });
+};
+
+CheckContactTransaction.prototype.check_self_user_key = function() {
+    var trans = this;
+    trans.change_state('check_self_user_key');
+
+    squeakclient.local.read_user_key(
+            {node_name: trans.node_name,
+             public_key_hash: trans.key_hash},
+            function(resp, textStatus) {
+                trans.handlers.debug(resp);
+
+                if (resp.status === 'ok') {
+                    trans.is_self();
+
+                } else if (resp.status === 'error') {
+                    if (resp.reason === 'user key not found') {
+                        trans.user_key_missing();
+                    } else {
+                        trans.handlers.error(resp);
+                    }
+                }
+            });
+};
+
+CheckContactTransaction.prototype.key_missing = function() {
+    this.change_state('key_missing');
+    this.handlers.key_missing(this.key_hash);
+};
+
+CheckContactTransaction.prototype.user_key_missing = function() {
+    this.change_state('user_key_missing');
+    this.handlers.user_key_missing(this.node_name, this.user_id, this.key_hash);
+};
+
+CheckContactTransaction.prototype.ok = function() {
+    this.change_state('ok');
+    this.handlers.ok(this.node_name, this.user_id, this.key_hash, this.trust_score);
+};
+
+CheckContactTransaction.prototype.is_self = function() {
+    this.change_state('is_self');
+    this.handlers.is_self(this.node_name, this.user_id, this.key_hash);
+};
+
+window.onload = function() {
+    var node_name = params.node,
+        user = params.user,
+        key = params.key,
+        self_user_id = cookies.user_id;
+
+    if (node_name !== undefined &&
+        user !== undefined &&
+        key !== undefined) {
+
+        var ustring = user_string(node_name, user);
+        document.title = 'Contact: ' + ustring;
+        $('.user').text(ustring);
+        $('.user-key').text(key);
+
+        var send_url = 'compose.html?' + $.param(params),
+            invite_url = 'invite.html?' + $.param(params);
+
+        $('#send-link').attr('href', send_url);
+        $('#invite-link').attr('href', invite_url);
+
+        var handlers = {
+                state_changed: function(new_state) {
+                    $('#check-state').text(new_state);
+                },
+                debug: debug,
+                error: handle_error,
+                key_missing: function(key_hash) {
+                    $('#key-missing-div').show();
+                },
+                user_key_missing: function(node_name, user_id, key_hash) {
+                    $('#user-key-missing-div').show();
+                },
+                ok: function(node_name, user_id, key_hash, trust_score) {
+                    $('.trust-score').text(trust_score);
+                    $('#main-div').show();
+                },
+                is_self: function(node_name, user_id, key_hash) {
+                    var account_link = 'account.html?' +
+                        $.param({node: node_name, user: user_id, key: key_hash});
+
+                    $('.trust-score').text('self');
+                    $('#delete-div').hide();
+                    $('#account-link').attr('href', account_link);
+                    $('#account-div').show();
+                    $('#main-div').show();
+                }
+            },
+            trans = new CheckContactTransaction(node_name, user, key, self_user_id, handlers);
+
+        trans.start();
+    } else {
+        say('Bad Parameters');
+    }
+
+};
+
+</script>
+</head>
+<body>
+
+
+<div>
+<span>Contact
+    <span class="user"></span>
+    <span class="user-key"></span>
+    <span>Trust Score: <span class="trust-score"></span></span>
+</span>
+<a href="home.html">Home</a>
+</div>
+
+<div id="main-div" style="display:none;">
+    <div>
+        <a href="#" id="send-link">Send Message</a>
+    </div>
+
+    <div>
+        <a href="#" id="invite-link">Invite</a>
+    </div>
+
+    <div id="delete-div">
+        <a href="#delete-div" onclick="delete_button();">Delete</a>
+        <div id="confirm-delete-div" style="display:none;">
+            <span>Are you sure you want to delete <span class="user"></span>?</span>
+            <button onclick="delete_contact();">Yes</button>
+            <button onclick="cancel_delete();">No</button>
+        </div>
+    </div>
+
+    <div id="account-div" style="display:none;">
+        <a href="#" id="account-link">Account</a>
+    </div>
+</div>
+
+<div id="user-key-missing-div" style="display:none;">
+    <span>There is no evidence that the key belongs to this user.</span>
+</div>
+
+<div id="key-missing-div" style="display:none;">
+    <span>You don't have the public key</span>
+</div>
+
+<div>
+<span>Check State: <span id="check-state"></span></span>
+</div>
+
+<div>
+<span id="state"></span>
+</div>
+
+<div>
+<span id="message"></span>
+</div>
+
+<div>
+<span>Debug:</span>
+<span id="debug-message"></span>
+</div>
+
+</body>
+</html>

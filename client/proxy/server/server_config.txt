@@ -23,6 +23,7 @@ Listen 12324 # https
     WSGIScriptAlias /local/group-access /home/eek6/squeakspace/client/proxy/server/scripts/local/group-access.wsgi
     WSGIScriptAlias /local/group-key /home/eek6/squeakspace/client/proxy/server/scripts/local/group-key.wsgi
     WSGIScriptAlias /local/list-group-keys /home/eek6/squeakspace/client/proxy/server/scripts/local/list-group-keys.wsgi
+    WSGIScriptAlias /local/list-node-addr /home/eek6/squeakspace/client/proxy/server/scripts/local/list-node-addr.wsgi
     WSGIScriptAlias /local/list-other-user-keys /home/eek6/squeakspace/client/proxy/server/scripts/local/list-other-user-keys.wsgi
     WSGIScriptAlias /local/list-private-keys /home/eek6/squeakspace/client/proxy/server/scripts/local/list-private-keys.wsgi
     WSGIScriptAlias /local/list-public-keys /home/eek6/squeakspace/client/proxy/server/scripts/local/list-public-keys.wsgi
@@ -53,6 +54,8 @@ Listen 12324 # https
     WSGIScriptAlias /proxy/group /home/eek6/squeakspace/client/proxy/server/scripts/proxy/group.wsgi
     WSGIScriptAlias /proxy/last-message-time /home/eek6/squeakspace/client/proxy/server/scripts/proxy/last-message-time.wsgi
     WSGIScriptAlias /proxy/last-post-time /home/eek6/squeakspace/client/proxy/server/scripts/proxy/last-post-time.wsgi
+    WSGIScriptAlias /proxy/max-message-size /home/eek6/squeakspace/client/proxy/server/scripts/proxy/max-message-size.wsgi
+    WSGIScriptAlias /proxy/max-post-size /home/eek6/squeakspace/client/proxy/server/scripts/proxy/max-post-size.wsgi
     WSGIScriptAlias /proxy/message-access /home/eek6/squeakspace/client/proxy/server/scripts/proxy/message-access.wsgi
     WSGIScriptAlias /proxy/message-list /home/eek6/squeakspace/client/proxy/server/scripts/proxy/message-list.wsgi
     WSGIScriptAlias /proxy/message-quota /home/eek6/squeakspace/client/proxy/server/scripts/proxy/message-quota.wsgi
@@ -61,9 +64,10 @@ Listen 12324 # https
     WSGIScriptAlias /proxy/post-list /home/eek6/squeakspace/client/proxy/server/scripts/proxy/post-list.wsgi
     WSGIScriptAlias /proxy/post /home/eek6/squeakspace/client/proxy/server/scripts/proxy/post.wsgi
     WSGIScriptAlias /proxy/query-message-access /home/eek6/squeakspace/client/proxy/server/scripts/proxy/query-message-access.wsgi
+    WSGIScriptAlias /proxy/query-user /home/eek6/squeakspace/client/proxy/server/scripts/proxy/query-user.wsgi
     WSGIScriptAlias /proxy/user-config /home/eek6/squeakspace/client/proxy/server/scripts/proxy/user-config.wsgi
     WSGIScriptAlias /proxy/user-quota /home/eek6/squeakspace/client/proxy/server/scripts/proxy/user-quota.wsgi
     WSGIScriptAlias /proxy/user /home/eek6/squeakspace/client/proxy/server/scripts/proxy/user.wsgi
+    WSGIScriptAlias /proxy/quota-available /home/eek6/squeakspace/client/proxy/server/scripts/proxy/quota-available.wsgi
     WSGIScriptAlias /proxy/version /home/eek6/squeakspace/client/proxy/server/scripts/proxy/version.wsgi
-
 

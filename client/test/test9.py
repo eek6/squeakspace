@@ -21,5 +21,8 @@ print version
 version = client.read_version()
 print version
 
+quota = client.read_quota_available(None)
+print quota
+
 version = client.read_version()
 print version

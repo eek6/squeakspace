@@ -62,10 +62,11 @@ def get_handler(environ):
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
-        resp = db.read_post(c, user_id, session_id, node_name, group_id, owner_id, post_id,
-                            passphrase, decrypt_post)
+        resp, validation = db.read_post(c,
+                user_id, session_id, node_name, group_id, owner_id, post_id,
+                passphrase, decrypt_post)
 
-        raise ht.ok_json({'status' : 'ok', 'resp' : resp})
+        raise ht.ok_json({'status' : 'ok', 'resp' : resp, 'validation' : validation})
         
     except ex.SqueakException as e:
         raise ht.convert_squeak_exception(e)

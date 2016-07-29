@@ -9,6 +9,7 @@ class User:
     def __init__(self, user_id, key, revoke_date,
                  default_mail_access, when_mail_exhausted,
                  quota_size, mail_quota_size,
+                 max_message_size,
                  user_class, auth_token):
 
         self.user_id = user_id
@@ -18,6 +19,7 @@ class User:
         self.when_mail_exhausted = when_mail_exhausted
         self.quota_size = quota_size
         self.mail_quota_size = mail_quota_size
+        self.max_message_size = max_message_size
         self.user_class = user_class
         self.auth_token = auth_token
 
@@ -26,6 +28,7 @@ class User:
                 self.user_id, self.key, self.revoke_date,
                 self.default_mail_access, self.when_mail_exhausted,
                 self.quota_size, self.mail_quota_size,
+                self.max_message_size,
                 self.user_class, self.auth_token)
 
     def read(self, client):

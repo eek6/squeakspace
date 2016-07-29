@@ -52,7 +52,7 @@ resp = cl.generate_private_key(user1, session1, test_params.key_type, test_param
 assert(resp['status'] == 'ok')
 pkh1 = resp['public_key_hash']
 
-resp = cl.read_private_key(user1, session1, pkh1)
+resp = cl.read_private_key(user1, session1, pkh1, False, True)
 assert(resp['status'] == 'ok')
 
 resp = cl.assign_user_key(user1, session1, test_params.node_name, pkh1)
@@ -71,7 +71,7 @@ resp = cl.generate_private_key(user2, session2, test_params.key_type, test_param
 assert(resp['status'] == 'ok')
 pkh2 = resp['public_key_hash']
 
-resp = cl.read_private_key(user2, session2, pkh2)
+resp = cl.read_private_key(user2, session2, pkh2, False, True)
 assert(resp['status'] == 'ok')
 
 resp = cl.assign_user_key(user2, session2, test_params.node_name, pkh2)
@@ -100,6 +100,7 @@ assert(resp['status'] == 'ok')
 resp = cl.create_user(user1, session1,
                       test_params.node_name, pkh1, 'block', 'block',
                       quota_size=100*_mb, mail_quota_size=50*_mb,
+                      max_message_size=None,
                       user_class=None, auth_token=None)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
@@ -108,17 +109,18 @@ assert(resp['resp']['status'] == 'ok')
 resp = cl.create_user(user2, session2,
                       test_params.node_name, pkh2, 'allow', 'block',
                       quota_size=100*_mb, mail_quota_size=50*_mb,
+                      max_message_size=None,
                       user_class=None, auth_token=None)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 
 
-resp = cl.read_private_key(user1, session1, pkh1)
+resp = cl.read_private_key(user1, session1, pkh1, False, True)
 assert(resp['status'] == 'ok')
 pkt1 = resp['key']['key_type']
 pk1 = resp['key']['public_key']
 
-resp = cl.read_private_key(user2, session2, pkh2)
+resp = cl.read_private_key(user2, session2, pkh2, False, True)
 assert(resp['status'] == 'ok')
 pkt2 = resp['key']['key_type']
 pk2 = resp['key']['public_key']
@@ -142,7 +144,7 @@ resp = cl.generate_private_key(user1, session1, test_params.key_type, test_param
 assert(resp['status'] == 'ok')
 group_pkh = resp['public_key_hash']
 
-resp = cl.read_private_key(user1, session1, group_pkh)
+resp = cl.read_private_key(user1, session1, group_pkh, False, True)
 assert(resp['status'] == 'ok')
 group_pkt = resp['key']['key_type']
 group_pk = resp['key']['public_key']
@@ -153,28 +155,38 @@ assert(resp['key']['public_key_hash'] == group_pkh)
 group_post_access = 'proof_of_work/' + test_params.proof_of_work_args
 
 
-resp = cl.assign_local_group_key(user1, session1, group_name, user1, test_params.node_name, 'read', group_pkh)
-assert(resp['status'] == 'ok')
-
-resp = cl.assign_local_group_key(user1, session1, group_name, user1, test_params.node_name, 'post', group_pkh)
-assert(resp['status'] == 'ok')
-
-resp = cl.assign_local_group_key(user1, session1, group_name, user1, test_params.node_name, 'delete', pkh1)
-assert(resp['status'] == 'ok')
-
-resp = cl.set_local_group_access(user1, session1, group_name, user1, test_params.node_name, 'read', 'allow')
-assert(resp['status'] == 'ok')
-
-resp = cl.set_local_group_access(user1, session1, group_name, user1, test_params.node_name, 'post', group_post_access)
-assert(resp['status'] == 'ok')
-
-resp = cl.set_local_group_access(user1, session1, group_name, user1, test_params.node_name, 'delete', 'allow')
-assert(resp['status'] == 'ok')
+# Now these are assigned within the creat_group request which has
+# the side effect of caching the values locally.
+#
+#resp = cl.assign_local_group_key(user1, session1, group_name, user1, test_params.node_name, 'read', group_pkh)
+#assert(resp['status'] == 'ok')
+#
+#resp = cl.assign_local_group_key(user1, session1, group_name, user1, test_params.node_name, 'post', group_pkh)
+#assert(resp['status'] == 'ok')
+#
+#resp = cl.assign_local_group_key(user1, session1, group_name, user1, test_params.node_name, 'delete', pkh1)
+#assert(resp['status'] == 'ok')
+#
+#resp = cl.set_local_group_access(user1, session1, group_name, user1, test_params.node_name, 'read', 'allow')
+#assert(resp['status'] == 'ok')
+#
+#resp = cl.set_local_group_access(user1, session1, group_name, user1, test_params.node_name, 'post', group_post_access)
+#assert(resp['status'] == 'ok')
+#
+#resp = cl.set_local_group_access(user1, session1, group_name, user1, test_params.node_name, 'delete', 'allow')
+#assert(resp['status'] == 'ok')
 
 
 resp = cl.create_group(user1, session1, test_params.node_name, group_name,
+                       post_access=group_post_access,
+                       read_access='allow',
+                       delete_access='allow',
+                       posting_key_hash=group_pkh,
+                       reading_key_hash=group_pkh,
+                       delete_key_hash=pkh1,
                        quota_allocated=10*_mb,
                        when_space_exhausted='block',
+                       max_post_size=None,
                        public_key_hash=pkh1,
                        passphrase=passphrase1)
 assert(resp['status'] == 'ok')
@@ -245,9 +257,22 @@ resp = cl.send_message(user1, session1, test_params.node_name,
                        from_user_key_hash=None,
                        message=invitation_str,
                        passphrase=None)
+assert(resp['status'] == 'error')
+assert(resp['reason'] == 'encryption forced')
+
+
+resp = cl.send_message(user1, session1, test_params.node_name,
+                       to_user=user2,
+                       to_user_key_hash=None,
+                       from_user_key_hash=None,
+                       message=invitation_str,
+                       passphrase=None,
+                       force_encryption=False)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 invitation_id = resp['message_id']
+
+
 
 
 resp = cl.read_last_message_time(user2, session2, test_params.node_name, pkh2, passphrase2)
@@ -259,6 +284,9 @@ last_message_time2 = new_time
 
 
 resp = cl.read_message_list(user2, session2, test_params.node_name,
+                            to_user_key=None,
+                            from_user=None,
+                            from_user_key=None,
                             start_time=last_message_time2,
                             end_time=None,
                             max_records=None,
@@ -367,6 +395,35 @@ parameters = resp['resp']['parameters']
 resp = cl.set_local_group_access(user2, session2, group_name, user1, test_params.node_name, 'post', 'proof_of_work/' + parameters)
 assert(resp['status'] == 'ok')
 
+resp = cl.read_max_post_size(user2, session2, test_params.node_name, group_name, user1, group_passphrase)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+assert(resp['resp']['max_post_size'] == None)
+
+resp = cl.change_max_post_size(user1, session1, test_params.node_name, group_name, 1, pkh1, passphrase1)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+
+resp = cl.read_max_post_size(user2, session2, test_params.node_name, group_name, user1, group_passphrase)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+assert(resp['resp']['max_post_size'] == 1)
+
+resp = cl.make_post(user2, session2, test_params.node_name, group_name, user1, cipher, group_passphrase)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'error')
+assert(resp['resp']['reason'] == 'post too large')
+post1_id = resp['post_id']
+
+resp = cl.change_max_post_size(user1, session1, test_params.node_name, group_name, None, pkh1, passphrase1)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+
+resp = cl.read_max_post_size(user2, session2, test_params.node_name, group_name, user1, group_passphrase)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+assert(resp['resp']['max_post_size'] == None)
+
 
 resp = cl.make_post(user2, session2, test_params.node_name, group_name, user1, cipher, group_passphrase)
 assert(resp['status'] == 'ok')
@@ -435,6 +492,9 @@ assert(resp['resp']['status'] == 'ok')
 post_list = resp['resp']['post_list']
 assert(len(post_list) == 2)
 post_header = post_list[0]
+
+print post_header['post_id'],post2_id
+
 assert(post_header['post_id'] == post2_id)
 
 resp = cl.read_post(user2, session2, test_params.node_name, group_name, user1, post2_id, group_passphrase)

@@ -90,6 +90,8 @@ local/private-key.wsgi
   urlencoded
 
   public_key_hash
+  only_public_part -- Default is false. When true, only loads the public key.
+  allow_private_user_key -- Default is false.
 
 
   DELETE -- delete a private key
@@ -518,10 +520,15 @@ proxy/group.wsgi
 
   node_name
   group_id -- unique name under owner_id
-  -- accesses are set up with local/group-access
-  -- the group keys are setup using local/group-key
+  post_access
+  read_access
+  delete_access
+  posting_key_hash -- These keys are private and owned by user_id.
+  reading_key_hash -- These may be null if there is no key.
+  delete_key_hash
   quota_allocated
   when_space_exhausted -- block, free_oldest
+  max_post_size -- number in bytes, or null
 
   public_key_hash -- key belongs to owner_id
   passphrase -- for public_key_hash, or null
@@ -590,6 +597,55 @@ proxy/query-message-access.wsgi
   passphrase -- for from_user_key or null
 
 
+proxy/max-message-size.wsgi
+
+  GET -- read max message size
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  to_user
+  from_user_key_hash
+  passphrase -- for from_user_key or null
+
+
+  POST -- change max message size
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  new_size
+  public_key_hash -- belongs to user_id
+  passphrase -- for public_key_hash or null
+
+
+proxy/max-post-size.wsgi
+
+  GET -- read max post size
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+  owner_id
+  passphrase -- for post key or null
+
+
+  POST -- change max post size
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  group_id
+  new_size
+  public_key_hash -- belongs to user_id
+  passphrase -- for public_key_hash or null
+
+
 proxy/message-access.wsgi
 
   GET -- read message access
@@ -634,6 +690,9 @@ proxy/message-list.wsgi
   urlencoded
 
   node_name
+  to_user_key -- or null
+  from_user -- or null
+  from_user_key -- or null
   start_time -- or null
   end_time -- or null
   max_records -- or null
@@ -792,6 +851,28 @@ proxy/user-quota.wsgi
   public_key_hash
   passphrase - for public_key_hash or null
 
+
+proxy/quota-available.wsgi
+
+  GET -- get the quota available for new users.
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  user_class -- optional
+
+proxy/query-user.wsgi
+
+  GET -- See if a user exists at a node.
+  cookies: user_id, session_id
+
+  urlencoded
+
+  node_name
+  other_user_id
+
+
 proxy/user.wsgi
 
   POST -- registration. There is no user authentication here since the identity has to yet to be established.
@@ -805,6 +886,7 @@ proxy/user.wsgi
   when_mail_exhausted -- free_oldest, block
   quota_size -- bytes, number
   mail_quota_size -- bytes, number, less than quota_size
+  max_message_size -- bytes, number, or null.
   user_class -- some kind of value? up to the node.
   auth_token -- some kind of value, up to the node. One time use.
 

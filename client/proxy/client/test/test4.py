@@ -48,7 +48,7 @@ resp = cl.generate_private_key(user1, session1, test_params.key_type, test_param
 assert(resp['status'] == 'ok')
 pkh1 = resp['public_key_hash']
 
-resp = cl.read_private_key(user1, session1, pkh1)
+resp = cl.read_private_key(user1, session1, pkh1, False, True)
 assert(resp['status'] == 'ok')
 
 resp = cl.assign_user_key(user1, session1, test_params.node_name, pkh1)
@@ -67,7 +67,7 @@ resp = cl.generate_private_key(user2, session2, test_params.key_type, test_param
 assert(resp['status'] == 'ok')
 pkh2 = resp['public_key_hash']
 
-resp = cl.read_private_key(user2, session2, pkh2)
+resp = cl.read_private_key(user2, session2, pkh2, False, True)
 assert(resp['status'] == 'ok')
 
 resp = cl.assign_user_key(user2, session2, test_params.node_name, pkh2)
@@ -106,28 +106,47 @@ assert(resp['status'] == 'ok')
 resp = cl.set_node_addr(user2, session2, test_params.node_name, test_params.node_addr, test_params.node_name)
 assert(resp['status'] == 'ok')
 
+resp = cl.read_version(user2, session2, test_params.node_name)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+
+resp = cl.read_quota_available(user2, session2, test_params.node_name, None)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+
+resp = cl.query_user(user1, session1, test_params.node_name, user1)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+assert(resp['resp']['user_exists'] == False)
+
 resp = cl.create_user(user1, session1,
                       test_params.node_name, pkh1, 'block', 'block',
                       quota_size=100*_mb, mail_quota_size=50*_mb,
+                      max_message_size=None,
                       user_class=None, auth_token=None)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 
+resp = cl.query_user(user1, session1, test_params.node_name, user1)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+assert(resp['resp']['user_exists'] == True)
 
 resp = cl.create_user(user2, session2,
                       test_params.node_name, pkh2, 'allow', 'block',
                       quota_size=100*_mb, mail_quota_size=50*_mb,
+                      max_message_size=None,
                       user_class=None, auth_token=None)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 
 
-resp = cl.read_private_key(user1, session1, pkh1)
+resp = cl.read_private_key(user1, session1, pkh1, False, True)
 assert(resp['status'] == 'ok')
 pkt1 = resp['key']['key_type']
 pk1 = resp['key']['public_key']
 
-resp = cl.read_private_key(user2, session2, pkh2)
+resp = cl.read_private_key(user2, session2, pkh2, False, True)
 assert(resp['status'] == 'ok')
 pkt2 = resp['key']['key_type']
 pk2 = resp['key']['public_key']
@@ -198,6 +217,36 @@ assert(resp['status'] == 'ok')
 resp = cl.query_message_access(user1, session1, test_params.node_name, user2, pkh1, None)
 assert(resp['status'] == 'ok')
 
+
+resp = cl.read_max_message_size(user1, session1, test_params.node_name, user2, pkh1, None)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+assert(resp['resp']['max_message_size'] == None)
+
+resp = cl.change_max_message_size(user2, session2, test_params.node_name, 1, pkh2, None)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+
+resp = cl.read_max_message_size(user1, session1, test_params.node_name, user2, pkh1, None)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+assert(resp['resp']['max_message_size'] == 1)
+
+resp = cl.send_message(user1, session1, test_params.node_name,
+                       to_user=user2,
+                       to_user_key_hash=pkh2,
+                       from_user_key_hash=None,
+                       message=cipher,
+                       passphrase=None)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'error')
+assert(resp['resp']['reason'] == 'message too large')
+
+resp = cl.change_max_message_size(user2, session2, test_params.node_name, None, pkh2, None)
+assert(resp['status'] == 'ok')
+assert(resp['resp']['status'] == 'ok')
+
+
 resp = cl.send_message(user1, session1, test_params.node_name,
                        to_user=user2,
                        to_user_key_hash=pkh2,
@@ -218,6 +267,9 @@ last_message_time2 = new_time
 
 
 resp = cl.read_message_list(user2, session2, test_params.node_name,
+                            to_user_key=None,
+                            from_user=None,
+                            from_user_key=None,
                             start_time=last_message_time2,
                             end_time=None,
                             max_records=None,
@@ -268,9 +320,22 @@ resp = cl.send_message(user2, session2, test_params.node_name,
                        from_user_key_hash=None,
                        message=message2,
                        passphrase=None)
+assert(resp['status'] == 'error')
+assert(resp['reason'] == 'encryption forced')
+
+
+resp = cl.send_message(user2, session2, test_params.node_name,
+                       to_user=user1,
+                       to_user_key_hash=None,
+                       from_user_key_hash=None,
+                       message=message2,
+                       passphrase=None,
+                       force_encryption=False)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'error')
 assert(resp['resp']['reason'] == 'blocked')
+
+
 
 
 resp = cl.set_message_access(user1, session1, test_params.node_name, pkh2, 'allow', pkh1, passphrase1)
@@ -284,6 +349,17 @@ resp = cl.send_message(user2, session2, test_params.node_name,
                        from_user_key_hash=None,
                        message=message2,
                        passphrase=None)
+assert(resp['status'] == 'error')
+assert(resp['reason'] == 'encryption forced')
+
+
+resp = cl.send_message(user2, session2, test_params.node_name,
+                       to_user=user1,
+                       to_user_key_hash=None,
+                       from_user_key_hash=None,
+                       message=message2,
+                       passphrase=None,
+                       force_encryption=False)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'error')
 assert(resp['resp']['reason'] == 'blocked')
@@ -294,7 +370,8 @@ resp = cl.send_message(user2, session2, test_params.node_name,
                        to_user_key_hash=None,
                        from_user_key_hash=pkh2,
                        message=message2,
-                       passphrase=passphrase2)
+                       passphrase=passphrase2,
+                       force_encryption=False)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 message2_id = resp['message_id']
@@ -304,10 +381,13 @@ assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 new_time = resp['resp']['last_message_time']
 assert(new_time != None)
-assert(new_time > last_message_time2)
+assert(new_time >= last_message_time2)
 last_message_time1 = new_time
 
 resp = cl.read_message_list(user1, session1, test_params.node_name,
+                            to_user_key=None,
+                            from_user=None,
+                            from_user_key=None,
                             start_time=last_message_time1,
                             end_time=None,
                             max_records=None,
@@ -338,7 +418,8 @@ resp = cl.send_message(user2, session2, test_params.node_name,
                        to_user_key_hash=None,
                        from_user_key_hash=pkh2,
                        message=spam_message,
-                       passphrase=passphrase2)
+                       passphrase=passphrase2,
+                       force_encryption=False)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'error')
 assert(resp['resp']['reason'] == 'blocked')
@@ -354,7 +435,8 @@ resp = cl.send_message(user2, session2, test_params.node_name,
                        to_user_key_hash=None,
                        from_user_key_hash=pkh2,
                        message=spam_message,
-                       passphrase=passphrase2)
+                       passphrase=passphrase2,
+                       force_encryption=False)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 
