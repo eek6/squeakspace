@@ -500,6 +500,20 @@ class BadKeyTypeException(SqueakException):
                 'key_type' : self.key_type}
 
 
+class BadKeyException(SqueakException):
+    type = SqueakStatusCodes.bad_request
+
+    def __init__(self, argument):
+        self.argument = argument
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type,
+                'reason' : 'bad key',
+                'argument' : self.argument}
+
+
+
 class KeyHashExistsException(SqueakException):
     type = SqueakStatusCodes.conflict
 
@@ -590,6 +604,31 @@ class BadPassphraseException(SqueakException):
 
 class SimpleBadPassphraseException(Exception):
     pass
+
+class BadCiphertextException(SqueakException):
+    type = SqueakStatusCodes.bad_request
+
+    def __init__(self):
+        pass
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type,
+                'reason' : 'bad ciphertext'}
+                
+
+class BadKeyParametersException(SqueakException):
+    type = SqueakStatusCodes.bad_request
+
+    def __init__(self, key_parameters):
+        self.key_parameters = key_parameters
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type,
+                'reason' : 'bad key parameters',
+                'key_parameters' : self.key_parameters}
+
 
 
 class MessageIdExistsException(SqueakException):

@@ -22,7 +22,7 @@ def get_handler(environ):
     max_records = ht.convert_int(ht.get_optional(query, 'max_records'), 'max_records')
     order = ht.get_optional(query, 'order')
     public_key_hash = ht.get_required(query, 'public_key_hash')
-    passphrase  = ht.get_optional(query, 'passphrase ')
+    passphrase  = ht.get_optional(query, 'passphrase')
 
     conn = db.connect(config.db_path)
     try:

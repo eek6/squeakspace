@@ -20,7 +20,6 @@ class ProofOfWorkDummy:
         level = parameters_obj['level']
         try:
             (start, lev, dat) = proof.split(';')
-            print ('verify_dummy:', start, lev, dat, parameters_obj, data)
             return start == 'proof_of_work' and \
                    int(lev) == level and \
                    dat == data

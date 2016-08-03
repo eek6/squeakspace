@@ -15,13 +15,12 @@ def post_handler(environ):
     key_type = ht.get_required(query, 'key_type')
     key_parameters  = ht.get_optional(query, 'key_parameters')
     revoke_date = ht.get_optional(query, 'revoke_date')
-    passphrase = ht.get_optional(query, 'passphrase')
 
     conn = db.connect(config.db_path)
     try:
         c = db.cursor(conn)
         public_key_hash = db.generate_private_key(
-                c, user_id, session_id, key_type, key_parameters, revoke_date, passphrase)
+                c, user_id, session_id, key_type, key_parameters, revoke_date)
         db.commit(conn)
 
         raise ht.ok_json({'status' : 'ok', 'public_key_hash' : public_key_hash})

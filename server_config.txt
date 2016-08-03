@@ -1,7 +1,9 @@
 # This is for apache with mod_wsgi.
 
+
 # add this outside VirtualHost
 WSGIDaemonProcess squeakspace python-path=/home/eek6/squeakspace/server/lib:/home/eek6/squeakspace/common/lib:/home/eek6/squeakspace/lib:/home/eek6/squeakspace/lib/gnupg
+
 
 # add this inside of each VirtualHost
     WSGIProcessGroup squeakspace
@@ -15,9 +17,6 @@ WSGIDaemonProcess squeakspace python-path=/home/eek6/squeakspace/server/lib:/hom
     WSGIScriptAlias /last-message-time /home/eek6/squeakspace/server/scripts/last-message-time.wsgi
     WSGIScriptAlias /last-post-time /home/eek6/squeakspace/server/scripts/last-post-time.wsgi
     WSGIScriptAlias /query-message-access /home/eek6/squeakspace/server/scripts/query-message-access.wsgi
-    WSGIScriptAlias /query-user /home/eek6/squeakspace/server/scripts/query-user.wsgi
-    WSGIScriptAlias /max-message-size /home/eek6/squeakspace/server/scripts/max-message-size.wsgi
-    WSGIScriptAlias /max-post-size /home/eek6/squeakspace/server/scripts/max-post-size.wsgi
     WSGIScriptAlias /message-access /home/eek6/squeakspace/server/scripts/message-access.wsgi
     WSGIScriptAlias /message-list /home/eek6/squeakspace/server/scripts/message-list.wsgi
     WSGIScriptAlias /message-quota /home/eek6/squeakspace/server/scripts/message-quota.wsgi
@@ -27,10 +26,9 @@ WSGIDaemonProcess squeakspace python-path=/home/eek6/squeakspace/server/lib:/hom
     WSGIScriptAlias /post /home/eek6/squeakspace/server/scripts/post.wsgi
     WSGIScriptAlias /user-config /home/eek6/squeakspace/server/scripts/user-config.wsgi
     WSGIScriptAlias /user-quota /home/eek6/squeakspace/server/scripts/user-quota.wsgi
-    WSGIScriptAlias /quota-available /home/eek6/squeakspace/server/scripts/quota-available.wsgi
     WSGIScriptAlias /user /home/eek6/squeakspace/server/scripts/user.wsgi
     WSGIScriptAlias /version /home/eek6/squeakspace/server/scripts/version.wsgi
 
     # Below are for debugging. Don't enable in the wild.
-    WSGIScriptAlias /debug /home/eek6/squeakspace/server/scripts/debug.wsgi
+    # WSGIScriptAlias /debug /home/eek6/squeakspace/server/scripts/debug.wsgi
 

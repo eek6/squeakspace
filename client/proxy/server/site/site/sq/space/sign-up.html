@@ -461,13 +461,20 @@ SignUpTransaction.prototype.create_user_key = function() {
     this.change_state('create_user_key');
 
     squeakclient.local.generate_private_key(
-            {key_type: 'pgp', // 'dummy',
+            {key_type: 'squeak', // 'pgp', // 'dummy',
              key_parameters: JSON.stringify(
+                 // pgp
+                 /* 
                  {name_real: trans.user_id,
                   name_email: trans.user_id,
                   key_type: 'RSA',
                   key_length: 4096,
+                  passphrase: trans.password} */
+
+                  // squeak
+                 {bits: 4096,
                   passphrase: trans.password}),
+
              revoke_date: null,
              passphrase: trans.password},
             function(resp, textStatus) {
@@ -542,12 +549,18 @@ SignUpTransaction.prototype.create_group_key = function() {
     trans.change_state('create_group_key');
 
     squeakclient.local.generate_private_key(
-            {key_type: 'pgp', // 'dummy'
+            {key_type: 'squeak', // 'pgp', // 'dummy'
              key_parameters: JSON.stringify(
+                 // pgp
+                 /*  
                  {name_real: trans.user_id,
                   name_email: trans.user_id,
                   key_type: 'RSA',
-                  key_length: 4096}),
+                  key_length: 4096} */
+
+                 // squeak
+                 {bits: 4096}),
+
              revoke_date: null},
             function(resp, textStatus) {
                 debug(resp);
@@ -772,9 +785,6 @@ Auth Token:
 <span>Debug:</span>
 <span id="debug-message"></span>
 </div>
-<div onclick="update_cookie();">
-<span>Cookie:</span>
-<span id="cookie_message"></span>
-</div>
+
 </body>
 </html>

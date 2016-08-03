@@ -16,14 +16,17 @@ client = cl.Client(conn, test_params.node_name)
 
 
 key_type = test_params.key_type
-key_parameters = {'name_real' : 'Alf',
-                  'name_email' : 'alf@example.com',
-                  'key_type' : 'RSA',
-                  'key_length' : 1024,
-                  'key_usage' : 'cert',
-                  'subkey_type' : 'RSA',
-                  'subkey_length' : 1024,
-                  'subkey_usage' : 'encrypt,sign,auth'}
+if key_type == 'pgp':
+    key_parameters = {'name_real' : 'Alf',
+                      'name_email' : 'alf@example.com',
+                      'key_type' : 'RSA',
+                      'key_length' : 1024,
+                      'key_usage' : 'cert',
+                      'subkey_type' : 'RSA',
+                      'subkey_length' : 1024,
+                      'subkey_usage' : 'encrypt,sign,auth'}
+elif key_type == 'squeak':
+    key_parameters = {'bits' : 4096}
 
 
 Alf = tp.User('Alf',
@@ -40,8 +43,9 @@ Alf = tp.User('Alf',
 resp = Alf.create(client)
 assert(resp['status'] == 'ok')
 
-print (client.send_debug({'action' : 'database'}))
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    print (client.send_debug({'action' : 'database'}))
+    client.assert_integrity(True)
 
 mess = 'This is a test'
 (resp, gen) = client.send_message(
@@ -54,7 +58,8 @@ mess = 'This is a test'
 
 assert(resp['status'] == 'ok')
 mess_id = gen[0]
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_message(Alf.user_id, mess_id, Alf.key)
@@ -63,14 +68,17 @@ message = resp['message']
 assert(message['message'] == mess)
 assert(message['message_id'] == mess_id)
 
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.delete_message(Alf.user_id, mess_id, Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = Alf.delete(client)
 assert(resp['status'] == 'ok')
 
-client.assert_db_empty()
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_db_empty()
+    client.assert_integrity(True)

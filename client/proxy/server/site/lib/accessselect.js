@@ -56,7 +56,7 @@ AccessSelect.prototype.initUI = function() {
 
     this.ui.proof_of_work.alg_select
         .append($('<option>'))
-        .append($('<option>').val('dummy').append('Dummy'))
+        // .append($('<option>').val('dummy').append('Dummy')) // Only allow dummy proof of work when debugging.
         .append($('<option>').val('hashcash').append('Hashcash'))
         .change(function() {
                     self.algSelectChange();

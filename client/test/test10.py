@@ -25,24 +25,35 @@ mail_quota = 10*1024*1024
 
 
 key_type = test_params.key_type
-key_parameters1 = {'name_real' : 'Alf',
-                   'name_email' : 'alf@example.com',
-                   'key_type' : 'RSA',
-                   'key_length' : 1024,
-                   'key_usage' : 'cert',
-                   'subkey_type' : 'RSA',
-                   'subkey_length' : 1024,
-                   'subkey_usage' : 'encrypt,sign,auth'}
 
 
-key_parameters2 = {'name_real' : 'Tony',
-                   'name_email' : 'tony@example.com',
-                   'key_type' : 'RSA',
-                   'key_length' : 1024,
-                   'key_usage' : 'cert',
-                   'subkey_type' : 'RSA',
-                   'subkey_length' : 1024,
-                   'subkey_usage' : 'encrypt,sign,auth'}
+
+
+if key_type == 'pgp':
+    key_parameters1 = {'name_real' : 'Alf',
+                       'name_email' : 'alf@example.com',
+                       'key_type' : 'RSA',
+                       'key_length' : 1024,
+                       'key_usage' : 'cert',
+                       'subkey_type' : 'RSA',
+                       'subkey_length' : 1024,
+                       'subkey_usage' : 'encrypt,sign,auth'}
+elif key_type == 'squeak':
+    key_parameters1 = {'bits' : 4096}
+
+
+
+if key_type == 'pgp':
+    key_parameters2 = {'name_real' : 'Tony',
+                       'name_email' : 'tony@example.com',
+                       'key_type' : 'RSA',
+                       'key_length' : 1024,
+                       'key_usage' : 'cert',
+                       'subkey_type' : 'RSA',
+                       'subkey_length' : 1024,
+                       'subkey_usage' : 'encrypt,sign,auth'}
+elif key_type == 'squeak':
+    key_parameters2 = {'bits' : 4096}
 
 
 Alf = tp.User(
@@ -72,13 +83,17 @@ Tony = tp.User(
 
 resp = Alf.create(client)
 assert(resp['status'] == 'ok')
-client.send_debug({'action' : 'database'})
-client.assert_integrity(True)
+
+if test_params.node_debug_enabled == True:
+    client.send_debug({'action' : 'database'})
+    client.assert_integrity(True)
 
 resp = Tony.create(client)
 assert(resp['status'] == 'ok')
-client.send_debug({'action' : 'database'})
-client.assert_integrity(True)
+
+if test_params.node_debug_enabled == True:
+    client.send_debug({'action' : 'database'})
+    client.assert_integrity(True)
 
 
 message1 = '1' * (mail_quota / 4)
@@ -97,7 +112,8 @@ message5 = '5' * (mail_quota / 4)
         proof_of_work_args=None)
 assert(resp['status'] == 'ok')
 (mes1_id, mes1_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.send_message(
@@ -109,7 +125,8 @@ client.assert_integrity(True)
         proof_of_work_args=None)
 assert(resp['status'] == 'ok')
 (mes2_id, mes2_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.send_message(
@@ -121,7 +138,8 @@ client.assert_integrity(True)
         proof_of_work_args=None)
 assert(resp['status'] == 'ok')
 (mes3_id, mes3_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.send_message(
@@ -134,14 +152,16 @@ client.assert_integrity(True)
 assert(resp['status'] == 'error')
 assert(resp['reason'] == 'quota exceeded')
 (mes4_id, mes4_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_user_quota(Tony.user_id, Tony.key)
 assert(resp['status'] == 'ok')
 quota = resp['user_quota']
 assert(quota['quota_allocated'] == user_quota)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_quota(Tony.user_id, Tony.key)
 assert(resp['status'] == 'ok')
@@ -149,16 +169,19 @@ quota = resp['message_quota']
 assert(quota['quota_allocated'] == mail_quota)
 assert(quota['quota_used'] > 0)
 assert(quota['when_space_exhausted'] == 'block')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.change_message_quota(Tony.user_id, mail_quota, 'free_eldest', Tony.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.change_message_quota(Tony.user_id, mail_quota, 'free_oldest', Tony.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_message_quota(Tony.user_id, Tony.key)
@@ -166,7 +189,8 @@ assert(resp['status'] == 'ok')
 quota = resp['message_quota']
 assert(quota['quota_allocated'] == mail_quota)
 assert(quota['when_space_exhausted'] == 'free_oldest')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.send_message(
@@ -178,7 +202,8 @@ client.assert_integrity(True)
         proof_of_work_args=None)
 assert(resp['status'] == 'ok')
 (mes4_id, mes4_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message(Tony.user_id, mes4_id, Tony.key)
 assert(resp['status'] == 'ok')
@@ -186,7 +211,8 @@ message = resp['message']
 assert(message['message'] == message4)
 assert(message['message_id'] == mes4_id)
 assert(message['timestamp'] == mes4_time)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.send_message(
@@ -198,7 +224,8 @@ client.assert_integrity(True)
         proof_of_work_args=None)
 assert(resp['status'] == 'ok')
 (mes5_id, mes5_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message(Tony.user_id, mes5_id, Tony.key)
 assert(resp['status'] == 'ok')
@@ -206,23 +233,26 @@ message = resp['message']
 assert(message['message'] == message5)
 assert(message['message_id'] == mes5_id)
 assert(message['timestamp'] == mes5_time)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 # the first message must have been automatically deleted.
 resp = client.read_message(Tony.user_id, mes1_id, Tony.key)
 assert(resp['status'] == 'error')
 assert(resp['reason'] == 'unknown message')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = Alf.delete(client)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = Tony.delete(client)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
-
-client.assert_db_empty()
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
+    client.assert_db_empty()
 

@@ -578,19 +578,18 @@ def import_private_key(c, user_id, session_id, key_type, public_key, private_key
 
 # gen-key.wsgi
 
-def generate_private_key(c, user_id, session_id, key_type, key_parameters, revoke_date, passphrase=None):
+def generate_private_key(c, user_id, session_id, key_type, key_parameters, revoke_date):
 
     assert_session_id(c, user_id, session_id)
 
     try:
         key_params_obj = json.loads(key_parameters)
     except ValueError:
-        raise ex.BadKeyParametersException(key_parameters)
+        raise common_ex.BadKeyParametersException(key_parameters)
     except TypeError:
-        raise ex.BadKeyParametersException(key_parameters)
+        raise common_ex.BadKeyParametersException(key_parameters)
 
     # This might take a while. Should the connection close?
-    #(pub_key, priv_key) = ut.create_keypair(key_type, key_parameters)
     (pub_key, priv_key) = ut.create_keypair(key_type, key_params_obj)
 
     public_key_hash = ut.hash_public_key(key_type, pub_key)
@@ -1163,8 +1162,8 @@ def delete_passphrase(c, user_id, session_id, public_key_hash):
 # password.wsgi
 
 def make_hash_password_obj(password):
-    salt = base64.b64encode(os.urandom(config.pass_salt_len))
-    hash = base64.b64encode(kd.pbkdf2_hmac(config.pass_hash_fun, password, salt, config.pass_rounds))
+    salt = base64.urlsafe_b64encode(os.urandom(config.pass_salt_len))
+    hash = base64.urlsafe_b64encode(kd.pbkdf2_hmac(config.pass_hash_fun, password, salt, config.pass_rounds))
     return {'method' : 'hash',
             'hash' : hash,
             'hash_fun' : config.pass_hash_fun,
@@ -1233,7 +1232,7 @@ def assert_hash_password(user_id, password, params):
     stored_hash = str(params['hash'])
     salt = str(params['salt'])
 
-    hash = base64.b64encode(kd.pbkdf2_hmac(params['hash_fun'], password, salt, params['rounds']))
+    hash = base64.urlsafe_b64encode(kd.pbkdf2_hmac(params['hash_fun'], password, salt, params['rounds']))
     if not kd.compare_digest(hash, stored_hash):
         raise ex.BadPasswordException(user_id, password)
 

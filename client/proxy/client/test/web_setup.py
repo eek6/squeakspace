@@ -22,10 +22,15 @@ cl = client.Client(conn)
 user1 = 'user1'
 pass1 = 'user1'
 passphrase1 = None
+key_params1 = test_params.key_params.copy()
+key_params1['passphrase'] = passphrase1
 
 user2 = 'user2'
 pass2 = 'user2'
 passphrase2 = None
+key_params2 = test_params.key_params.copy()
+key_params2['passphrase'] = passphrase2
+
 
 local_node_name = 'local'
 
@@ -44,8 +49,7 @@ assert(cookies['user_id'].value == user2)
 session2 = cookies['session_id'].value
 
 
-resp = cl.generate_private_key(user1, session1, test_params.key_type, test_params.key_params,
-                               revoke_date=None, passphrase=passphrase1)
+resp = cl.generate_private_key(user1, session1, test_params.key_type, json.dumps(key_params1), revoke_date=None)
 assert(resp['status'] == 'ok')
 pkh1 = resp['public_key_hash']
 
@@ -54,8 +58,7 @@ assert(resp['status'] == 'ok')
 key1 = resp['key']
 
 
-resp = cl.generate_private_key(user2, session2, test_params.key_type, test_params.key_params,
-                               revoke_date=None, passphrase=passphrase2)
+resp = cl.generate_private_key(user2, session2, test_params.key_type, json.dumps(key_params2), revoke_date=None)
 assert(resp['status'] == 'ok')
 pkh2 = resp['public_key_hash']
 
@@ -84,6 +87,7 @@ assert(resp['status'] == 'ok')
 resp = cl.create_user(user1, session1,
                       local_node_name, pkh1, 'block', 'block',
                       quota_size=100*_mb, mail_quota_size=50*_mb,
+                      max_message_size=5*_mb,
                       user_class=None, auth_token=None)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
@@ -92,6 +96,7 @@ assert(resp['resp']['status'] == 'ok')
 resp = cl.create_user(user2, session2,
                       local_node_name, pkh2, 'allow', 'block',
                       quota_size=100*_mb, mail_quota_size=50*_mb,
+                      max_message_size=5*_mb,
                       user_class=None, auth_token=None)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')

@@ -32,17 +32,17 @@ class BadKeyUseException(SqueakClientException):
                 'reason' : 'bad key use',
                 'key_use' : self.key_use}
 
-class BadKeyParametersException(SqueakClientException):
-    type = ex.SqueakStatusCodes.bad_request
-
-    def __init__(self, key_parameters):
-        self.key_parameters = key_parameters
-
-    def dict(self):
-        return {'status' : 'error',
-                'error_code' : self.type,
-                'reason' : 'bad key parameters',
-                'key_parameters' : self.key_parameters}
+#class BadKeyParametersException(SqueakClientException):
+#    type = ex.SqueakStatusCodes.bad_request
+#
+#    def __init__(self, key_parameters):
+#        self.key_parameters = key_parameters
+#
+#    def dict(self):
+#        return {'status' : 'error',
+#                'error_code' : self.type,
+#                'reason' : 'bad key parameters',
+#                'key_parameters' : self.key_parameters}
 
 
 class BadPasswordParametersException(SqueakClientException):

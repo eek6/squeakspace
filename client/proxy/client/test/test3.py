@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import httplib as ht
+import json
 
 import client_path
 import client
@@ -14,10 +15,14 @@ cl = client.Client(conn)
 user1 = 'alice'
 pass1 = 'secret_password'
 passphrase1 = 'secret_passphrase'
+key_params1 = test_params.key_params.copy()
+key_params1['passphrase'] = passphrase1
 
 
 group_name = 'alice.club'
 group_passphrase = 'super secret'
+group_key_params = test_params.key_params.copy()
+group_key_params['passphrase'] = group_passphrase
 
 node_name = 'deluxenode'
 
@@ -29,8 +34,7 @@ assert(resp['status'] == 'ok')
 assert(cookies['user_id'].value == user1)
 session1 = cookies['session_id'].value
 
-resp = cl.generate_private_key(user1, session1, test_params.key_type, test_params.key_params,
-                               revoke_date=None, passphrase=passphrase1)
+resp = cl.generate_private_key(user1, session1, test_params.key_type, json.dumps(key_params1), revoke_date=None)
 assert(resp['status'] == 'ok')
 pkh1 = resp['public_key_hash']
 
@@ -41,8 +45,7 @@ resp = cl.assign_user_key(user1, session1, node_name, pkh1)
 assert(resp['status'] == 'ok')
 
 
-resp = cl.generate_private_key(user1, session1, test_params.key_type, test_params.key_params,
-                               revoke_date=None, passphrase=group_passphrase)
+resp = cl.generate_private_key(user1, session1, test_params.key_type, json.dumps(group_key_params), revoke_date=None)
 assert(resp['status'] == 'ok')
 group_key_hash = resp['public_key_hash']
 
@@ -164,9 +167,10 @@ assert(resp['status'] == 'ok')
 
 print(cl.read_local_version())
 
-resp = cl.local_debug('database')
-print resp
+if test_params.local_debug_enabled == True:
+    resp = cl.local_debug('database')
+    print resp
 
-cl.assert_db_empty()
+    cl.assert_db_empty()
 
 

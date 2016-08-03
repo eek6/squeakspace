@@ -215,6 +215,15 @@ function gen_priv_key() {
         if (passphrase !== '')
             key_params_obj.passphrase = passphrase;
     }
+    else if (key_type === 'squeak') {
+        var div = $('#squeak-parameters'),
+            rsa_key_bits = div.find('.rsa-key-bits').val();
+
+        key_params_obj.bits = parseInt(rsa_key_bits);
+
+        if (passphrase !== '')
+            key_params_obj.passphrase = passphrase;
+    }
     else {
         key_gen_say('Key Type required');
         return;
@@ -227,8 +236,7 @@ function gen_priv_key() {
     squeakclient.local.generate_private_key(
         {key_type: key_type,
          key_parameters: key_parameters,
-         revoke_date: revoke_date,
-         passphrase: passphrase},
+         revoke_date: revoke_date},
         function(resp, textStatus) {
             debug(JSON.stringify(resp));
 
@@ -644,12 +652,19 @@ function key_type_changed() {
     if (key_type === 'dummy') {
         $('#dummy-parameters').show();
         $('#pgp-parameters').hide();
+        $('#squeak-parameters').hide();
     } else if (key_type === 'pgp') {
         $('#dummy-parameters').hide();
         $('#pgp-parameters').show();
+        $('#squeak-parameters').hide();
+    } else if (key_type === 'squeak') {
+        $('#dummy-parameters').hide();
+        $('#pgp-parameters').hide();
+        $('#squeak-parameters').show();
     } else {
         $('#dummy-parameters').hide();
         $('#pgp-parameters').hide();
+        $('#squeak-parameters').hide();
     }
 }
 
@@ -762,9 +777,16 @@ Import
 <div id="gen-keys-div" style="display:none;">
 <label>Key Type:
 <select id="key-type" onchange="key_type_changed();">
+
 <option value="">Key Type</option>
+
+<!-- Only enable dummy keys when debugging.
 <option value="dummy">dummy</option>
+ -->
+
 <option value="pgp">pgp</option>
+<option value="squeak">squeak</option>
+
 </select>
 </label><br/>
 
@@ -782,6 +804,16 @@ Import
 <label>Subkey-Type: <input class="subkey-type"></input> </label><br/>
 <label>Subkey-Length: <input class="subkey-length"></input> </label><br/>
 <label>Subkey-Usage: <input class="subkey-usage"></input> </label><br/>
+</div>
+
+<div id="squeak-parameters" style="display:none;">
+<label>RSA Key Bits
+<select class="rsa-key-bits">
+<option value="4096">4096</option>
+<option value="2048">2048</option>
+<option value="1024">1024</option>
+</select>
+</label>
 </div>
 
 

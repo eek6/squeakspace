@@ -99,7 +99,7 @@ squeakclient.local.import_private_key = request({url: '/local/private-key', meth
 //
 
 squeakclient.local.generate_private_key = request({url: '/local/crypt/gen-key', method: 'POST'});
-// key_type, key_parameters, revoke_date, passphrase
+// key_type, key_parameters, revoke_date
 
 
 //

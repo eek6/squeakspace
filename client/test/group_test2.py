@@ -25,14 +25,18 @@ group_quota = 10*1024*1024
 
 
 key_type = test_params.key_type
-key_parameters = {'name_real' : 'Alf',
-                  'name_email' : 'alf@example.com',
-                  'key_type' : 'RSA',
-                  'key_length' : 1024,
-                  'key_usage' : 'cert',
-                  'subkey_type' : 'RSA',
-                  'subkey_length' : 1024,
-                  'subkey_usage' : 'encrypt,sign,auth'}
+if key_type == 'pgp':
+    key_parameters = {'name_real' : 'Alf',
+                      'name_email' : 'alf@example.com',
+                      'key_type' : 'RSA',
+                      'key_length' : 1024,
+                      'key_usage' : 'cert',
+                      'subkey_type' : 'RSA',
+                      'subkey_length' : 1024,
+                      'subkey_usage' : 'encrypt,sign,auth'}
+elif key_type == 'squeak':
+    key_parameters = {'bits' : 4096}
+
 
 Alf = tp.User(
         user_id='Alf',
@@ -48,32 +52,38 @@ Alf = tp.User(
         auth_token=None)
 
 
-read_key_parameters = {'name_real' : 'read.group1.Alf',
-                       'name_email' : 'read.group1.alf@example.com',
-                       'key_type' : 'RSA',
-                       'key_length' : 1024,
-                       'key_usage' : 'cert',
-                       'subkey_type' : 'RSA',
-                       'subkey_length' : 1024,
-                       'subkey_usage' : 'encrypt,sign,auth'}
+if key_type == 'pgp':
+    read_key_parameters = {'name_real' : 'read.group1.Alf',
+                           'name_email' : 'read.group1.alf@example.com',
+                           'key_type' : 'RSA',
+                           'key_length' : 1024,
+                           'key_usage' : 'cert',
+                           'subkey_type' : 'RSA',
+                           'subkey_length' : 1024,
+                           'subkey_usage' : 'encrypt,sign,auth'}
 
-post_key_parameters = {'name_real' : 'post.group1.Alf',
-                       'name_email' : 'post.group1.alf@example.com',
-                       'key_type' : 'RSA',
-                       'key_length' : 1024,
-                       'key_usage' : 'cert',
-                       'subkey_type' : 'RSA',
-                       'subkey_length' : 1024,
-                       'subkey_usage' : 'encrypt,sign,auth'}
+    post_key_parameters = {'name_real' : 'post.group1.Alf',
+                           'name_email' : 'post.group1.alf@example.com',
+                           'key_type' : 'RSA',
+                           'key_length' : 1024,
+                           'key_usage' : 'cert',
+                           'subkey_type' : 'RSA',
+                           'subkey_length' : 1024,
+                           'subkey_usage' : 'encrypt,sign,auth'}
 
-delete_key_parameters = {'name_real' : 'delete.group1.Alf',
-                         'name_email' : 'delete.group1.alf@example.com',
-                         'key_type' : 'RSA',
-                         'key_length' : 1024,
-                         'key_usage' : 'cert',
-                         'subkey_type' : 'RSA',
-                         'subkey_length' : 1024,
-                         'subkey_usage' : 'encrypt,sign,auth'}
+    delete_key_parameters = {'name_real' : 'delete.group1.Alf',
+                             'name_email' : 'delete.group1.alf@example.com',
+                             'key_type' : 'RSA',
+                             'key_length' : 1024,
+                             'key_usage' : 'cert',
+                             'subkey_type' : 'RSA',
+                             'subkey_length' : 1024,
+                             'subkey_usage' : 'encrypt,sign,auth'}
+
+elif key_type == 'squeak':
+    read_key_parameters = {'bits' : 4096}
+    post_key_parameters = {'bits' : 4096}
+    delete_key_parameters = {'bits' : 4096}
 
 
 read_key = ut.createPrivateKey(key_type, read_key_parameters)
@@ -85,8 +95,9 @@ resp = Alf.create(client)
 
 assert(resp['status'] == 'ok')
 
-print (client.send_debug({'action' : 'database'}))
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    print (client.send_debug({'action' : 'database'}))
+    client.assert_integrity(True)
 
 
 
@@ -104,7 +115,8 @@ resp = client.create_group(
           max_post_size=None,
           auth_key=Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 post1 = '1' * (group_quota / 4)
@@ -116,39 +128,46 @@ post5 = '5' * (group_quota / 4)
 (resp, gen) = client.make_post('group1', Alf.user_id, post1, post_key, proof_of_work_args)
 assert(resp['status'] == 'ok')
 (post1_id, post1_timestamp, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_post('group1', Alf.user_id, post1_id, read_key, None)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.make_post('group1', Alf.user_id, post2, post_key, proof_of_work_args)
 assert(resp['status'] == 'ok')
 (post2_id, post2_timestamp, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_post('group1', Alf.user_id, post2_id, read_key, None)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.make_post('group1', Alf.user_id, post3, post_key, proof_of_work_args)
 assert(resp['status'] == 'ok')
 (post3_id, post3_timestamp, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_post('group1', Alf.user_id, post3_id, read_key, None)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.make_post('group1', Alf.user_id, post4, post_key, proof_of_work_args)
 assert(resp['status'] == 'error')
 assert(resp['reason'] == 'quota exceeded')
 (post3_id, post3_timestamp, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_group_quota('group1', Alf.user_id, read_key, None)
@@ -156,54 +175,63 @@ assert(resp['status'] == 'ok')
 quota = resp['group_quota']
 assert(quota['quota_allocated'] == group_quota)
 assert(quota['when_space_exhausted'] == 'block')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.change_group_quota('group1', Alf.user_id, group_quota, 'FREE_OLDEST', Alf.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.change_group_quota('group1', Alf.user_id, group_quota, 'free_oldest', Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_group_quota('group1', Alf.user_id, read_key, None)
 assert(resp['status'] == 'ok')
 quota = resp['group_quota']
 assert(quota['quota_allocated'] == group_quota)
 assert(quota['when_space_exhausted'] == 'free_oldest')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.make_post('group1', Alf.user_id, post4, post_key, proof_of_work_args)
 assert(resp['status'] == 'ok')
 (post4_id, post4_timestamp, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_post('group1', Alf.user_id, post4_id, read_key, None)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 (resp, gen) = client.make_post('group1', Alf.user_id, post5, post_key, proof_of_work_args)
 assert(resp['status'] == 'ok')
 (post5_id, post5_timestamp, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_post('group1', Alf.user_id, post5_id, read_key, None)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_post('group1', Alf.user_id, post1_id, read_key, None)
 assert(resp['status'] == 'error')
 assert(resp['reason'] == 'unknown post')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = Alf.delete(client)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
-
-client.assert_db_empty()
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
+    client.assert_db_empty()
 
 

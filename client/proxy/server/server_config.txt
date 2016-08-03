@@ -42,11 +42,10 @@ Listen 12324 # https
     WSGIScriptAlias /local/version /home/eek6/squeakspace/client/proxy/server/scripts/local/version.wsgi
 
     # don't enable this unless debugging.
-    WSGIScriptAlias /local/debug /home/eek6/squeakspace/client/proxy/server/scripts/local/debug.wsgi
-
+    # WSGIScriptAlias /local/debug /home/eek6/squeakspace/client/proxy/server/scripts/local/debug.wsgi
+    # WSGIScriptAlias /proxy/debug /home/eek6/squeakspace/client/proxy/server/scripts/proxy/debug.wsgi
 
     WSGIScriptAlias /proxy/complain /home/eek6/squeakspace/client/proxy/server/scripts/proxy/complain.wsgi
-    WSGIScriptAlias /proxy/debug /home/eek6/squeakspace/client/proxy/server/scripts/proxy/debug.wsgi
     WSGIScriptAlias /proxy/group-access /home/eek6/squeakspace/client/proxy/server/scripts/proxy/group-access.wsgi
     WSGIScriptAlias /proxy/group-key /home/eek6/squeakspace/client/proxy/server/scripts/proxy/group-key.wsgi
     WSGIScriptAlias /proxy/group-config /home/eek6/squeakspace/client/proxy/server/scripts/proxy/group-config.wsgi

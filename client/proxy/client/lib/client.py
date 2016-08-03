@@ -147,15 +147,14 @@ class Client:
     
     # local/crypt/gen-key.wsgi
     
-    def generate_private_key(self, user_id, session_id, key_type, key_parameters, revoke_date, passphrase=None):
+    def generate_private_key(self, user_id, session_id, key_type, key_parameters, revoke_date):
     
         method = 'POST'
         path = '/local/crypt/gen-key'
         body = uc.encode(
                 {'key_type' : key_type,
                  'key_parameters' : key_parameters,
-                 'revoke_date' : revoke_date,
-                 'passphrase' : passphrase})
+                 'revoke_date' : revoke_date})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
@@ -956,14 +955,17 @@ class Client:
     
     # proxy/message.wsgi
     
-    def read_message(self, user_id, session_id, node_name, message_id, public_key_hash, passphrase=None):
+    def read_message(self, user_id, session_id, node_name, message_id, public_key_hash,
+                     passphrase=None, decrypt_message=None, to_key_passphrase=None):
     
         method = 'GET'
         path = '/proxy/message?' + uc.encode(
                 {'node_name' : node_name,
                  'message_id' : message_id,
                  'public_key_hash' : public_key_hash,
-                 'passphrase' : passphrase})
+                 'passphrase' : passphrase,
+                 'decrypt_message' : decrypt_message,
+                 'to_key_passphrase' : to_key_passphrase})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=None, cookies=cookies)[0]

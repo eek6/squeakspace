@@ -123,7 +123,6 @@ local/crypt/gen-key.wsgi
   key_type
   key_parameters -- json dict
   revoke_date
-  passphrase -- or null
 
 
 local/group-key.wsgi

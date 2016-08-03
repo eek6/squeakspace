@@ -66,12 +66,11 @@ def verify_proof_of_work(parameters, data, proof):
      
 
 def hash_function(data):
-    #return 'hash' + data # debug
     hash = hashlib.sha256()
     hash.update(str(len(data)))
-    #hash.update('|')
+    hash.update('|')
     hash.update(data)
-    return base64.b64encode(hash.digest())
+    return base64.urlsafe_b64encode(hash.digest())
 
 
 def verify_hash(data, hash):

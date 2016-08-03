@@ -17,14 +17,17 @@ user_id = 'Alf'
 #key_parameters = {}
 
 key_type = test_params.key_type
-key_parameters = {'name_real' : 'Alf',
-                  'name_email' : 'alf@example.com',
-                  'key_type' : 'RSA',
-                  'key_length' : 1024,
-                  'key_usage' : 'cert',
-                  'subkey_type' : 'RSA',
-                  'subkey_length' : 1024,
-                  'subkey_usage' : 'encrypt,sign,auth'}
+if key_type == 'pgp':
+    key_parameters = {'name_real' : 'Alf',
+                      'name_email' : 'alf@example.com',
+                      'key_type' : 'RSA',
+                      'key_length' : 1024,
+                      'key_usage' : 'cert',
+                      'subkey_type' : 'RSA',
+                      'subkey_length' : 1024,
+                      'subkey_usage' : 'encrypt,sign,auth'}
+elif key_type == 'squeak':
+    key_parameters = {'bits' : 4096}
 
 
 user_key = ut.createPrivateKey(key_type, key_parameters)
@@ -45,12 +48,14 @@ resp = client.create_user(
         user_class, auth_token)
 assert(resp['status'] == 'ok')
 
-print (client.send_debug({'action' : 'database'}))
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    print (client.send_debug({'action' : 'database'}))
+    client.assert_integrity(True)
 
 resp = client.delete_user(user_id, user_key)
 assert(resp['status'] == 'ok')
 
-client.assert_db_empty()
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_db_empty()
+    client.assert_integrity(True)
 

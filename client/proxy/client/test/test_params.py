@@ -7,9 +7,17 @@ server_port = 12323
 node_name = 'node_name'
 node_addr = 'http://localhost:80'
 
-key_type = 'dummy'
+#key_type = 'dummy'
+#key_params = json.dumps({})
+
 #key_type = 'pgp'
-key_params = json.dumps({})
+#key_params = json.dumps({})
+
+key_type = 'squeak'
+key_params = {'bits': 4096}
+
+local_debug_enabled = False
+node_debug_enabled = False
 
 
 #proof_of_work_args = json.dumps({'algorithm':'dummy','level':2})

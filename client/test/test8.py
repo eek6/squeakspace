@@ -26,24 +26,30 @@ user_quota_expand = 200*1024*1024
 
 
 key_type = test_params.key_type
-key_parameters1 = {'name_real' : 'Alf',
-                   'name_email' : 'alf@example.com',
-                   'key_type' : 'RSA',
-                   'key_length' : 1024,
-                   'key_usage' : 'cert',
-                   'subkey_type' : 'RSA',
-                   'subkey_length' : 1024,
-                   'subkey_usage' : 'encrypt,sign,auth'}
+if key_type == 'pgp':
+    key_parameters1 = {'name_real' : 'Alf',
+                       'name_email' : 'alf@example.com',
+                       'key_type' : 'RSA',
+                       'key_length' : 1024,
+                       'key_usage' : 'cert',
+                       'subkey_type' : 'RSA',
+                       'subkey_length' : 1024,
+                       'subkey_usage' : 'encrypt,sign,auth'}
+elif key_type == 'squeak':
+    key_parameters1 = {'bits' : 4096}
 
 
-key_parameters2 = {'name_real' : 'Tony',
-                   'name_email' : 'tony@example.com',
-                   'key_type' : 'RSA',
-                   'key_length' : 1024,
-                   'key_usage' : 'cert',
-                   'subkey_type' : 'RSA',
-                   'subkey_length' : 1024,
-                   'subkey_usage' : 'encrypt,sign,auth'}
+if key_type == 'pgp':
+    key_parameters2 = {'name_real' : 'Tony',
+                       'name_email' : 'tony@example.com',
+                       'key_type' : 'RSA',
+                       'key_length' : 1024,
+                       'key_usage' : 'cert',
+                       'subkey_type' : 'RSA',
+                       'subkey_length' : 1024,
+                       'subkey_usage' : 'encrypt,sign,auth'}
+elif key_type == 'squeak':
+    key_parameters2 = {'bits' : 4096}
 
 
 Alf = tp.User(
@@ -76,8 +82,10 @@ assert(resp['user_exists'] == False)
 
 resp = Alf.create(client)
 assert(resp['status'] == 'ok')
-client.send_debug({'action' : 'database'})
-client.assert_integrity(True)
+
+if test_params.node_debug_enabled == True:
+    client.send_debug({'action' : 'database'})
+    client.assert_integrity(True)
 
 resp = client.query_user(Alf.user_id)
 assert(resp['status'] == 'ok')
@@ -85,14 +93,17 @@ assert(resp['user_exists'] == True)
 
 resp = Tony.create(client)
 assert(resp['status'] == 'ok')
-client.send_debug({'action' : 'database'})
-client.assert_integrity(True)
+
+if test_params.node_debug_enabled == True:
+    client.send_debug({'action' : 'database'})
+    client.assert_integrity(True)
 
 resp = client.read_user(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 obj = resp['user']
 assert(obj['last_message_time'] == None)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 weird_key = ut.PrivateKey(key_type, Tony.key.public_key, Tony.key.private_key, Tony.key.passphrase) 
 weird_key.public_key_hash = Alf.key.public_key_hash
@@ -100,41 +111,49 @@ weird_key.public_key_hash = Alf.key.public_key_hash
 #resp = client.read_last_message_time(Alf.user_id, Tony.key.public_key_hash, Tony.key_type, Tony.private_key, Tony.passphrase)
 resp = client.read_last_message_time(Alf.user_id, Tony.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_last_message_time(Alf.user_id, weird_key)
 #resp = client.read_last_message_time(Alf.user_id, Alf.key.public_key_hash, Tony.key_type, Tony.private_key, Tony.passphrase)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_last_message_time(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 assert(resp['last_message_time'] == None)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_user_quota(Alf.user_id, Tony.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_user_quota(Alf.user_id, weird_key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_user_quota(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 quota = resp['user_quota']
 assert(quota['quota_allocated'] == user_quota)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_message_quota(Alf.user_id, Tony.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_quota(Alf.user_id, weird_key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_quota(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
@@ -142,7 +161,8 @@ quota = resp['message_quota']
 assert(quota['quota_allocated'] == mail_quota)
 assert(quota['quota_used'] == 0)
 assert(quota['when_space_exhausted'] == 'block')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 
@@ -155,7 +175,8 @@ tony2 = 'signed message from tony'
 
 resp = client.set_message_access(Tony.user_id, None, 'block', Tony.key) # block anonymous mail
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.send_message(
@@ -168,7 +189,8 @@ client.assert_integrity(True)
 assert(resp['status'] == 'error')
 assert(resp['reason'] == 'blocked')
 (alf1_id, alf1_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_max_message_size(
@@ -181,7 +203,8 @@ assert(resp['reason'] == 'blocked')
 
 resp = client.set_message_access(Tony.user_id, None, 'allow', Tony.key) # allow anonymous mail
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_max_message_size(
@@ -215,7 +238,8 @@ assert(resp['status'] == 'ok')
 assert(resp['status'] == 'error')
 assert(resp['reason'] == 'message too large')
 (alf1_id, alf1_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.change_max_message_size(
@@ -234,7 +258,8 @@ assert(resp['status'] == 'ok')
         proof_of_work_args=None)
 assert(resp['status'] == 'ok')
 (alf1_id, alf1_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 
@@ -247,18 +272,21 @@ client.assert_integrity(True)
         proof_of_work_args=alf_proof_of_work_args)
 assert(resp['status'] == 'ok')
 (tony1_id, tony1_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_user(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 obj = resp['user']
 assert(obj['last_message_time'] == tony1_time)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_last_message_time(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 assert(resp['last_message_time'] == tony1_time)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.send_message(
@@ -270,7 +298,8 @@ client.assert_integrity(True)
         proof_of_work_args=None)
 assert(resp['status'] == 'ok')
 (alf2_id, alf2_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 (resp, gen) = client.send_message(
         to_user=Alf.user_id,
@@ -281,18 +310,21 @@ client.assert_integrity(True)
         proof_of_work_args=alf_proof_of_work_args)
 assert(resp['status'] == 'ok')
 (tony2_id, tony2_time, _, _, _) = gen
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_user(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 obj = resp['user']
 assert(obj['last_message_time'] == tony2_time)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_last_message_time(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 assert(resp['last_message_time'] == tony2_time)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_message(Alf.user_id, tony1_id, Alf.key)
@@ -301,7 +333,8 @@ message = resp['message']
 assert(message['message'] == tony1)
 assert(message['message_id'] == tony1_id)
 assert(message['timestamp'] == tony1_time)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message(Tony.user_id, alf2_id, Tony.key)
 assert(resp['status'] == 'ok')
@@ -309,7 +342,8 @@ message = resp['message']
 assert(message['message'] == alf2)
 assert(message['message_id'] == alf2_id)
 assert(message['timestamp'] == alf2_time)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 # Tony tries to check Alf's mail.
@@ -323,7 +357,8 @@ resp = client.read_message_list(Alf.user_id,
         order=None,
         auth_key=Tony.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.read_message_list(Alf.user_id,
@@ -338,7 +373,8 @@ resp = client.read_message_list(Alf.user_id,
 assert(resp['status'] == 'ok')
 message_list = resp['message_list']
 assert(len(message_list) == 2)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_list(Alf.user_id,
         to_user_key = None,
@@ -352,7 +388,8 @@ resp = client.read_message_list(Alf.user_id,
 assert(resp['status'] == 'ok')
 message_list = resp['message_list']
 assert(len(message_list) == 2)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_list(Alf.user_id,
         to_user_key = None,
@@ -367,7 +404,8 @@ resp = client.read_message_list(Alf.user_id,
 assert(resp['status'] == 'ok')
 message_list = resp['message_list']
 assert(len(message_list) == 1)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_list(Tony.user_id,
         to_user_key = None,
@@ -381,7 +419,8 @@ resp = client.read_message_list(Tony.user_id,
 assert(resp['status'] == 'ok')
 message_list = resp['message_list']
 assert(len(message_list) == 2)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_list(Tony.user_id,
         to_user_key = None,
@@ -395,7 +434,8 @@ resp = client.read_message_list(Tony.user_id,
 assert(resp['status'] == 'ok')
 message_list = resp['message_list']
 assert(len(message_list) == 2)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_list(Tony.user_id,
         to_user_key = None,
@@ -409,7 +449,8 @@ resp = client.read_message_list(Tony.user_id,
 assert(resp['status'] == 'ok')
 message_list = resp['message_list']
 assert(len(message_list) == 1)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 # quotas part
@@ -418,7 +459,8 @@ resp = client.read_user_quota(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 quota = resp['user_quota']
 assert(quota['quota_allocated'] == user_quota)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_quota(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
@@ -426,102 +468,122 @@ quota = resp['message_quota']
 assert(quota['quota_allocated'] == mail_quota)
 assert(quota['quota_used'] > 0)
 assert(quota['when_space_exhausted'] == 'block')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.change_user_quota(Alf.user_id, mail_quota + 100, None, None, Tony.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 #resp = client.change_user_quota(Alf.user_id, mail_quota + 100, None, None, Alf.key.public_key_hash, Tony.key_type, Tony.private_key, Tony.passphrase)
 resp = client.change_user_quota(Alf.user_id, mail_quota + 100, None, None, weird_key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.change_user_quota(Alf.user_id, -5, None, None, Alf.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.change_user_quota(Alf.user_id, mail_quota - 100, None, None, Alf.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.change_user_quota(Alf.user_id, mail_quota + 1000, None, None, Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_user_quota(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 quota = resp['user_quota']
 assert(quota['quota_allocated'] == mail_quota + 1000)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 
 resp = client.change_message_quota(Alf.user_id, mail_quota + 5, 'block', Tony.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 #resp = client.change_message_quota(Alf.user_id, mail_quota + 5, 'block', Alf.key.public_key_hash, Tony.key_type, Tony.private_key, Tony.passphrase)
 resp = client.change_message_quota(Alf.user_id, mail_quota + 5, 'block', weird_key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.change_message_quota(Alf.user_id, -5, 'block', Alf.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.change_message_quota(Alf.user_id, mail_quota + 5, 'blocky', Alf.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.change_message_quota(Alf.user_id, 5, 'block', Alf.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.change_message_quota(Alf.user_id, mail_quota + 5, 'block', Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_quota(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 quota = resp['message_quota']
 assert(quota['quota_allocated'] == mail_quota + 5)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.change_message_quota(Alf.user_id, mail_quota - 5, 'block', Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_quota(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 quota = resp['message_quota']
 assert(quota['quota_allocated'] == mail_quota - 5)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.change_user_quota(Alf.user_id, user_quota, None, None, Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_user_quota(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 quota = resp['user_quota']
 assert(quota['quota_allocated'] == user_quota)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 
 
 resp = client.change_message_quota(Alf.user_id, mail_quota, 'block', Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_quota(Alf.user_id, Alf.key)
 assert(resp['status'] == 'ok')
 quota = resp['message_quota']
 assert(quota['quota_allocated'] == mail_quota)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 
@@ -531,17 +593,19 @@ client.assert_integrity(True)
 
 other_message = 'A more filtered message'
 
-pow_args = json.dumps({'algorithm':'dummy','level':5})
+pow_args = json.dumps({'algorithm':'hashcash','bits':20})
 access_str = 'proof_of_work/' + pow_args
 
 resp = client.read_message_access(Alf.user_id, Tony.key.public_key_hash, Alf.key)
 assert(resp['status'] == 'error')
 assert(resp['reason'] == 'unknown message access')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.set_message_access(Alf.user_id, Tony.key.public_key_hash, access_str, Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_access(Alf.user_id, Tony.key.public_key_hash, Alf.key)
 assert(resp['status'] == 'ok')
@@ -549,7 +613,8 @@ access = resp['message_access']
 assert(access['user_id'] == Alf.user_id)
 assert(access['from_user_key_hash'] == Tony.key.public_key_hash)
 assert(access['access'] == access_str)
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 (resp, gen) = client.send_message(
@@ -560,7 +625,8 @@ client.assert_integrity(True)
         message=other_message,
         proof_of_work_args=None)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 (resp, gen) = client.send_message(
         to_user=Alf.user_id,
@@ -570,7 +636,8 @@ client.assert_integrity(True)
         message=other_message,
         proof_of_work_args=alf_proof_of_work_args)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 (resp, gen) = client.send_message(
         to_user=Alf.user_id,
@@ -580,12 +647,14 @@ client.assert_integrity(True)
         message=other_message,
         proof_of_work_args=pow_args)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.set_message_access(Alf.user_id, Tony.key.public_key_hash, 'block', Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.read_message_access(Alf.user_id, Tony.key.public_key_hash, Alf.key)
 assert(resp['status'] == 'ok')
@@ -593,7 +662,8 @@ access = resp['message_access']
 assert(access['user_id'] == Alf.user_id)
 assert(access['from_user_key_hash'] == Tony.key.public_key_hash)
 assert(access['access'] == 'block')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 (resp, gen) = client.send_message(
         to_user=Alf.user_id,
@@ -604,7 +674,8 @@ client.assert_integrity(True)
         proof_of_work_args=pow_args)
 assert(resp['status'] == 'error')
 assert(resp['reason'] == 'blocked')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 (resp, gen) = client.send_message(
         to_user=Alf.user_id,
@@ -615,16 +686,19 @@ client.assert_integrity(True)
         proof_of_work_args=alf_proof_of_work_args)
 assert(resp['status'] == 'error')
 assert(resp['reason'] == 'blocked')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 resp = client.delete_message_access(Alf.user_id, Tony.key.public_key_hash, Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.delete_message_access(Alf.user_id, Tony.key.public_key_hash, Alf.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 (resp, gen) = client.send_message(
         to_user=Alf.user_id,
@@ -634,28 +708,34 @@ client.assert_integrity(True)
         message=other_message,
         proof_of_work_args=alf_proof_of_work_args)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 
 
 resp = client.delete_message(Alf.user_id, tony1_id, Alf.key)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.delete_message(Alf.user_id, tony1_id, Alf.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = Alf.delete(client)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = client.delete_message(Alf.user_id, tony2_id, Alf.key)
 assert(resp['status'] == 'error')
-client.assert_integrity(True)
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
 
 resp = Tony.delete(client)
 assert(resp['status'] == 'ok')
-client.assert_integrity(True)
-client.assert_db_empty()
+if test_params.node_debug_enabled == True:
+    client.assert_integrity(True)
+    client.assert_db_empty()
 

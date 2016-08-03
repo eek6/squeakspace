@@ -23,12 +23,16 @@ user1 = 'alice'
 pass1 = 'secret_password'
 passphrase1 = 'secret_passphrase'
 last_message_time1 = None
+key_params1 = test_params.key_params.copy()
+key_params1['passphrase'] = passphrase1
 
 
 user2 = 'bob'
 pass2 = 'passw0rd'
 passphrase2 = 'secret_passphrase'
 last_message_time2 = None
+key_params2 = test_params.key_params.copy()
+key_params2['passphrase'] = passphrase2
 
 
 message1 = "hello bob"
@@ -43,8 +47,7 @@ assert(resp['status'] == 'ok')
 assert(cookies['user_id'].value == user1)
 session1 = cookies['session_id'].value
 
-resp = cl.generate_private_key(user1, session1, test_params.key_type, test_params.key_params,
-                               revoke_date=None, passphrase=passphrase1)
+resp = cl.generate_private_key(user1, session1, test_params.key_type, json.dumps(key_params1), revoke_date=None)
 assert(resp['status'] == 'ok')
 pkh1 = resp['public_key_hash']
 
@@ -62,8 +65,7 @@ assert(cookies['user_id'].value == user2)
 assert(cookies['session_id'].value == session2)
 
 
-resp = cl.generate_private_key(user2, session2, test_params.key_type, test_params.key_params,
-                               revoke_date=None, passphrase=passphrase2)
+resp = cl.generate_private_key(user2, session2, test_params.key_type, json.dumps(key_params2), revoke_date=None)
 assert(resp['status'] == 'ok')
 pkh2 = resp['public_key_hash']
 
@@ -214,20 +216,20 @@ cipher = resp['ciphertext']
 resp = cl.query_message_access(user1, session1, test_params.node_name, user2, None, None)
 assert(resp['status'] == 'ok')
 
-resp = cl.query_message_access(user1, session1, test_params.node_name, user2, pkh1, None)
+resp = cl.query_message_access(user1, session1, test_params.node_name, user2, pkh1, passphrase1)
 assert(resp['status'] == 'ok')
 
 
-resp = cl.read_max_message_size(user1, session1, test_params.node_name, user2, pkh1, None)
+resp = cl.read_max_message_size(user1, session1, test_params.node_name, user2, pkh1, passphrase1)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 assert(resp['resp']['max_message_size'] == None)
 
-resp = cl.change_max_message_size(user2, session2, test_params.node_name, 1, pkh2, None)
+resp = cl.change_max_message_size(user2, session2, test_params.node_name, 1, pkh2, passphrase2)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 
-resp = cl.read_max_message_size(user1, session1, test_params.node_name, user2, pkh1, None)
+resp = cl.read_max_message_size(user1, session1, test_params.node_name, user2, pkh1, passphrase1)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 assert(resp['resp']['max_message_size'] == 1)
@@ -242,7 +244,7 @@ assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'error')
 assert(resp['resp']['reason'] == 'message too large')
 
-resp = cl.change_max_message_size(user2, session2, test_params.node_name, None, pkh2, None)
+resp = cl.change_max_message_size(user2, session2, test_params.node_name, None, pkh2, passphrase2)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 
@@ -284,7 +286,7 @@ message_header = message_list[0]
 assert(message_header['message_id'] == message1_id)
 
 
-resp = cl.read_message(user2, session2, test_params.node_name, message1_id, pkh2, passphrase2)
+resp = cl.read_message(user2, session2, test_params.node_name, message1_id, pkh2, passphrase2, to_key_passphrase=passphrase1)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 assert(resp['resp']['message']['message_id'] == message1_id)
@@ -401,7 +403,7 @@ assert(len(message_list) == 1)
 message_header = message_list[0]
 assert(message_header['message_id'] == message2_id)
 
-resp = cl.read_message(user1, session1, test_params.node_name, message2_id, pkh1, passphrase1)
+resp = cl.read_message(user1, session1, test_params.node_name, message2_id, pkh1, passphrase1, to_key_passphrase=passphrase2)
 assert(resp['status'] == 'ok')
 assert(resp['resp']['status'] == 'ok')
 assert(resp['resp']['message']['message_id'] == message2_id)
@@ -460,6 +462,7 @@ assert(resp['status'] == 'ok')
 
 print(cl.read_local_version())
 
-cl.assert_db_empty()
+if test_params.local_debug_enabled == True:
+    cl.assert_db_empty()
 
 
