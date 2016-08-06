@@ -1,0 +1,37 @@
+# This is for apache with mod_wsgi.
+
+WSGIDaemonProcess squeakspace python-path=/home/eek6/squeakspace/lib:/home/eek6/squeakspace/lib/gnupg:/home/eek6/squeakspace/config/server:/home/eek6/squeakspace/config/common
+
+    DocumentRoot /home/eek6/squeakspace/www/server/site
+
+    WSGIProcessGroup squeakspace
+
+    WSGIScriptAlias /complain /home/eek6/squeakspace/www/server/scripts/complain.py
+    WSGIScriptAlias /group-access /home/eek6/squeakspace/www/server/scripts/group_access.py
+    WSGIScriptAlias /group-config /home/eek6/squeakspace/www/server/scripts/group_config.py
+    WSGIScriptAlias /group-key /home/eek6/squeakspace/www/server/scripts/group_key.py
+    WSGIScriptAlias /group-quota /home/eek6/squeakspace/www/server/scripts/group_quota.py
+    WSGIScriptAlias /group /home/eek6/squeakspace/www/server/scripts/group.py
+    WSGIScriptAlias /last-message-time /home/eek6/squeakspace/www/server/scripts/last_message_time.py
+    WSGIScriptAlias /last-post-time /home/eek6/squeakspace/www/server/scripts/last_post_time.py
+    WSGIScriptAlias /query-message-access /home/eek6/squeakspace/www/server/scripts/query_message_access.py
+    WSGIScriptAlias /query-user /home/eek6/squeakspace/www/server/scripts/query_user.py
+    WSGIScriptAlias /max-message-size /home/eek6/squeakspace/www/server/scripts/max_message_size.py
+    WSGIScriptAlias /max-post-size /home/eek6/squeakspace/www/server/scripts/max_post_size.py
+    WSGIScriptAlias /message-access /home/eek6/squeakspace/www/server/scripts/message_access.py
+    WSGIScriptAlias /message-list /home/eek6/squeakspace/www/server/scripts/message_list.py
+    WSGIScriptAlias /message-quota /home/eek6/squeakspace/www/server/scripts/message_quota.py
+    WSGIScriptAlias /message /home/eek6/squeakspace/www/server/scripts/message.py
+    WSGIScriptAlias /node /home/eek6/squeakspace/www/server/scripts/node.py
+    WSGIScriptAlias /post-list /home/eek6/squeakspace/www/server/scripts/post_list.py
+    WSGIScriptAlias /post /home/eek6/squeakspace/www/server/scripts/post.py
+    WSGIScriptAlias /user-config /home/eek6/squeakspace/www/server/scripts/user_config.py
+    WSGIScriptAlias /user-quota /home/eek6/squeakspace/www/server/scripts/user_quota.py
+    WSGIScriptAlias /quota-available /home/eek6/squeakspace/www/server/scripts/quota_available.py
+    WSGIScriptAlias /user /home/eek6/squeakspace/www/server/scripts/user.py
+    WSGIScriptAlias /version /home/eek6/squeakspace/www/server/scripts/version.py
+
+    # Below are for debugging. Don't enable in the wild.
+    # If enabled, anyone can download the database.
+    # WSGIScriptAlias /debug /home/eek6/squeakspace/www/server/scripts/debug.py
+
