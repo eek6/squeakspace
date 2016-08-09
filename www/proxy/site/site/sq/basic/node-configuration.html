@@ -31,9 +31,10 @@ function update_node_addrs() {
                     table.clear();
 
                     for ( ; i < length; i++ ) {
-                        var addr = addrs[i];
+                        var addr = addrs[i],
+                            fingerprint_str = addr.fingerprint_type + ',' + addr.fingerprint;
 
-                        table.addRow([addr.node_name, addr.url, addr.real_node_name]);
+                        table.addRow([addr.node_name, addr.url, addr.real_node_name, fingerprint_str]);
                     }
 
                 } else if (resp.status === 'error') {
@@ -46,12 +47,14 @@ function update_node_addrs() {
 function set_node_addr() {
     var node_name = $('#node-name').val(),
         url = $('#node-url').val(),
-        real_node_name = $('#real-node-name').val();
+        real_node_name = $('#real-node-name').val(),
+        fingerprint = $('#fingerprint').val();
 
     squeakclient.local.set_node_addr(
             {node_name: node_name,
              url: url,
-             real_node_name: real_node_name},
+             real_node_name: real_node_name,
+             fingerprint: fingerprint},
             function(resp, textStatus) {
                 debug(JSON.stringify(resp));
 
@@ -106,6 +109,7 @@ window.onload = function() {
 <td>Node Name
 <td>Node Address
 <td>Real Node Name
+<td>Fingerprint
 <td> 
 </tr>
 </tbody>
@@ -117,6 +121,7 @@ window.onload = function() {
 <td><input id="node-name"></input>
 <td><input id="node-url"></input>
 <td><input id="real-node-name"></input>
+<td><input id="fingerprint"></input>
 </tr>
 </tbody>
 </table>

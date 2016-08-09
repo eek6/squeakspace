@@ -7,7 +7,9 @@ import squeakspace.common.session_id as sid
 import squeakspace.proxy.server.squeak_cl_ex as ex
 import squeakspace.common.squeak_ex as common_ex
 import httplib
+import https_fingerprint
 import ssl
+import re
 import config
 import squeakspace.client.client as client
 import squeakspace.proxy.server.passphrase_cache as passphrase_cache
@@ -112,6 +114,8 @@ def make_db(c):
                                         node_name TEXT,
                                         url TEXT,
                                         real_node_name TEXT,
+                                        fingerprint_type TEXT, -- 'sha1' or 'sha256'
+                                        fingerprint TEXT,
                                         PRIMARY KEY(user_id, node_name))''')
 
     c.execute('''CREATE INDEX node_addr_index ON node_addr(user_id, node_name)''')
@@ -887,21 +891,21 @@ def assign_other_user_key(c, local_user_id, session_id, user_id, node_name, publ
 
 def get_node_addr(c, user_id, node_name):
 
-    c.execute('SELECT url, real_node_name FROM node_addr WHERE user_id=? AND node_name=?',
+    c.execute('SELECT url, real_node_name, fingerprint_type, fingerprint FROM node_addr WHERE user_id=? AND node_name=?',
               (user_id, node_name))
     row = c.fetchone()
 
     if row == None:
         raise ex.NodeAddrNotFoundException(user_id, node_name)
 
-    (url, real_node_name) = row
+    (url, real_node_name, fingerprint_type, fingerprint) = row
 
-    return url, real_node_name
+    return url, real_node_name, fingerprint_type, fingerprint
 
 
 def get_node_connection(c, user_id, node_name):
 
-    url, real_node_name = get_node_addr(c, user_id, node_name)
+    url, real_node_name, fingerprint_type, fingerprint = get_node_addr(c, user_id, node_name)
 
     (scheme, netloc, port) = parse_url(url)
 
@@ -910,9 +914,13 @@ def get_node_connection(c, user_id, node_name):
         conn = httplib.HTTPConnection(netloc, port)
 
     elif scheme == 'https':
-        # figure out ssl certificates.
-        # this is important.
-        conn = httplib.HTTPSConnection(netloc, port)
+        if fingerprint_type == None:
+            # TODO: Ensure ssl validates the certificate.
+            conn = httplib.HTTPSConnection(netloc, port)
+        else:
+            # Authenticate using stored fingerprint
+            conn = https_fingerprint.HTTPSConnection_CheckFingerprint(netloc, port)
+            conn.set_fingerprint(fingerprint_type, fingerprint)
 
     else:
         assert(False)
@@ -925,21 +933,39 @@ def read_node_addr(c, user_id, session_id, node_name):
 
     assert_session_id(c, user_id, session_id)
 
-    url, real_node_name = get_node_addr(c, user_id, node_name)
+    url, real_node_name, fingerprint_type, fingerprint  = get_node_addr(c, user_id, node_name)
 
     return {'node_name' : node_name,
             'url' : url,
-            'real_node_name' : real_node_name}
+            'real_node_name' : real_node_name,
+            'fingerprint_type' : fingerprint_type,
+            'fingerprint' : fingerprint}
 
 
-def set_node_addr(c, user_id, session_id, node_name, url, real_node_name):
+def set_node_addr(c, user_id, session_id, node_name, url, real_node_name, fingerprint=None):
 
     assert_session_id(c, user_id, session_id)
-
     assert_url(url)
 
-    c.execute('INSERT OR REPLACE INTO node_addr VALUES (?, ?, ?, ?)',
-              (user_id, node_name, url, real_node_name))
+    if fingerprint == None:
+        fingerprint_type = None
+    else:
+        fingerprint = fingerprint.replace(':', '')
+        fingerprint = fingerprint.lower()
+        hex_match = re.match('^[0-9a-f]*$', fingerprint)
+        if hex_match == None:
+            raise ex.InvalidFingerprintException(fingerprint, 'hex digits only')
+
+        if len(fingerprint) == 40:
+            fingerprint_type = 'sha1'
+        elif len(fingerprint) == 64:
+            fingerprint_type = 'sha256'
+        else:
+            raise ex.InvalidFingerprintException(fingerprint, 'bad length')
+
+
+    c.execute('INSERT OR REPLACE INTO node_addr VALUES (?, ?, ?, ?, ?, ?)',
+              (user_id, node_name, url, real_node_name, fingerprint_type, fingerprint))
 
 
 def delete_node_addr(c, user_id, session_id, node_name):
@@ -957,14 +983,16 @@ def list_node_addr(c, user_id, session_id):
     assert_session_id(c, user_id, session_id)
 
     rows = []
-    for row in c.execute('SELECT node_name, url, real_node_name FROM node_addr WHERE user_id=?', (user_id,)):
-        (node_name, url, real_node_name) = row
+    for row in c.execute('SELECT node_name, url, real_node_name, fingerprint_type, fingerprint FROM node_addr WHERE user_id=?', (user_id,)):
+        (node_name, url, real_node_name, fingerprint_type, fingerprint) = row
         rows.append({'node_name': node_name,
                      'url': url,
-                     'real_node_name': real_node_name})
+                     'real_node_name': real_node_name,
+                     'fingerprint_type': fingerprint_type,
+                     'fingerprint' : fingerprint})
 
     return rows
-        
+
 
 # local-group-access.wsgi
 
@@ -1405,19 +1433,23 @@ def dump_local_database(c):
 
 # Node.
 
-def handle_connection_exceptions(fun, args):
+def handle_connection_exceptions(node, fun, args):
 
     try:
         return fun(*args)
 
     except httplib.HTTPException as e:
-        raise ex.ConnectionException('http', str(e))
+        raise ex.BadConnectionException('http', str(e), node)
 
     except ssl.SSLError as e:
-        raise ex.ConnectionException('ssl', str(e))
+        raise ex.BadConnectionException('ssl', str(e), node)
 
     except IOError as e:
-        raise ex.ConnectionException('socket', str(e))
+        raise ex.BadConnectionException('socket', str(e), node)
+
+    except https_fingerprint.HTTPSFingerprintException as e:
+        raise ex.BadNodeFingerprintException(
+                e.fingerprint_type, e.expected_fingerprint, e.peer_fingerprint, node)
 
 # complain.wsgi
 
@@ -1427,10 +1459,11 @@ def change_group_access(c, user_id, session_id, node_name, group_id, use, access
 
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.change_group_access, (group_id, user_id, use, access, key))
 
 
@@ -1438,10 +1471,11 @@ def read_group_access(c, user_id, session_id, node_name, group_id, owner_id, use
 
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_group_key(c, user_id, group_id, owner_id, node_name, use, passphrase)
 
-    resp = handle_connection_exceptions(
+    resp = handle_connection_exceptions(node_obj,
             cl.read_group_access, (group_id, owner_id, use, key))
 
     if resp['status'] == 'ok':
@@ -1462,9 +1496,10 @@ def change_group_key(c, user_id, session_id, node_name, group_id, key_use, group
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.change_group_key, (group_id, user_id, key_use, pub_key, key))
 
 
@@ -1472,9 +1507,10 @@ def read_group_key(c, user_id, session_id, node_name, group_id, key_use, public_
     assert_session_id(c, user_id, session_id)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_group_key, (group_id, user_id, key_use, key))
 
 
@@ -1489,21 +1525,23 @@ def change_group_quota(c, user_id, session_id,
                        public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.change_group_quota, (group_id, user_id, new_size, when_space_exhausted, key))
 
 
 def read_group_quota(c, user_id, session_id, node_name, group_id, owner_id, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_group_key(c, user_id, group_id, owner_id, node_name, 'read', passphrase)
     proof_of_work_args = load_group_proof_of_work_args(c, user_id, group_id, owner_id, node_name, 'read')
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_group_quota, (group_id, owner_id, key, proof_of_work_args))
     
 
@@ -1519,6 +1557,7 @@ def create_group(c, user_id, session_id,
 
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
 
     #post_access, timestamp = load_local_group_access(c, user_id, group_id, user_id, node_name, 'post')
@@ -1558,7 +1597,7 @@ def create_group(c, user_id, session_id,
 
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.create_group, (group_id, user_id,
                               post_access, read_access, delete_access,
                               posting_pub_key, reading_pub_key, delete_pub_key,
@@ -1569,20 +1608,22 @@ def create_group(c, user_id, session_id,
 def read_group(c, user_id, session_id, node_name, group_id, public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_group, (group_id, user_id, key))
 
 
 def delete_group(c, user_id, session_id, node_name, group_id, public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.delete_group, (group_id, user_id, key))
 
 
@@ -1591,10 +1632,11 @@ def delete_group(c, user_id, session_id, node_name, group_id, public_key_hash, p
 def read_last_message_time(c, user_id, session_id, node_name, public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_last_message_time, (user_id, key))
 
 
@@ -1603,11 +1645,12 @@ def read_last_message_time(c, user_id, session_id, node_name, public_key_hash, p
 def read_last_post_time(c, user_id, session_id, node_name, group_id, owner_id, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     read_key, revoke_date = load_group_key(c, user_id, group_id, owner_id, node_name, 'read', passphrase)
     pow_args = load_group_proof_of_work_args(c, user_id, group_id, owner_id, node_name, 'read')
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_last_post_time, (group_id, owner_id, read_key, pow_args))
 
 
@@ -1616,12 +1659,13 @@ def read_last_post_time(c, user_id, session_id, node_name, group_id, owner_id, p
 def query_message_access(c, user_id, session_id, node_name, to_user, from_user_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     from_key = None
     if from_user_key_hash != None:
         from_key, revoke_date = load_user_key(c, user_id, node_name, from_user_key_hash, passphrase)
 
-    resp = handle_connection_exceptions(
+    resp = handle_connection_exceptions(node_obj,
             cl.query_message_access, (to_user, user_id, from_key))
 
     if resp['status'] == 'ok':
@@ -1639,23 +1683,25 @@ def query_message_access(c, user_id, session_id, node_name, to_user, from_user_k
 def read_max_message_size(c, user_id, session_id, node_name, to_user, from_user_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     from_key = None
     if from_user_key_hash != None:
         from_key, revoke_date = load_user_key(c, user_id, node_name, from_user_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_max_message_size, (to_user, user_id, from_key))
 
 
 def change_max_message_size(c, user_id, session_id, node_name, new_size, public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
 
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.change_max_message_size, (user_id, new_size, key))
 
 
@@ -1665,11 +1711,12 @@ def change_max_message_size(c, user_id, session_id, node_name, new_size, public_
 def read_max_post_size(c, user_id, session_id, node_name, group_id, owner_id, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
 
     post_key, revoke_date = load_group_key(c, user_id, group_id, owner_id, node_name, 'post', passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_max_post_size, (group_id, owner_id, post_key))
 
 
@@ -1677,11 +1724,12 @@ def change_max_post_size(c, user_id, session_id, node_name, group_id, new_size,
                          public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
 
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.change_max_post_size, (group_id, user_id, new_size, key))
 
 
@@ -1691,10 +1739,11 @@ def change_max_post_size(c, user_id, session_id, node_name, group_id, new_size,
 def read_message_access(c, user_id, session_id, node_name, from_user_key_hash, public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    resp = handle_connection_exceptions(
+    resp = handle_connection_exceptions(node_obj,
             cl.read_message_access, (user_id, from_user_key_hash, key))
 
     if resp['status'] == 'ok':
@@ -1708,10 +1757,11 @@ def set_message_access(c, user_id, session_id, node_name, from_user_key_hash, ac
 
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    resp = handle_connection_exceptions(
+    resp = handle_connection_exceptions(node_obj,
             cl.set_message_access, (user_id, from_user_key_hash, access, key))
 
     if resp['status'] == 'ok':
@@ -1723,10 +1773,11 @@ def set_message_access(c, user_id, session_id, node_name, from_user_key_hash, ac
 def delete_message_access(c, user_id, session_id, node_name, from_user_key_hash, public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    resp = handle_connection_exceptions(
+    resp = handle_connection_exceptions(node_obj,
             cl.delete_message_access, (user_id, from_user_key_hash, key))
 
     if resp['status'] == 'ok':
@@ -1749,10 +1800,11 @@ def read_message_list(c, user_id, session_id, node_name,
                       public_key_hash, passphrase = None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_message_list, (user_id,
                                    to_user_key, from_user, from_user_key,
                                    start_time, end_time, max_records, order, key))
@@ -1766,19 +1818,21 @@ def change_message_quota(c, user_id, session_id,
                          public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.change_message_quota, (user_id, new_size, when_space_exhausted, key))
 
 def read_message_quota(c, user_id, session_id, node_name, public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_message_quota, (user_id, key))
 
 
@@ -1882,10 +1936,11 @@ def read_message(c, user_id, session_id, node_name, message_id,
 
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    resp = handle_connection_exceptions(
+    resp = handle_connection_exceptions(node_obj,
             cl.read_message, (user_id, message_id, key))
 
     if resp['status'] != 'ok':
@@ -1948,6 +2003,7 @@ def send_message(c, user_id, session_id,
 
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
 
     from_user = None
@@ -1971,17 +2027,18 @@ def send_message(c, user_id, session_id,
         public_message = message
 
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.send_message, (to_user, to_user_key_hash, from_user, from_key, public_message, pow_args))
 
 
 def delete_message(c, user_id, session_id, node_name, message_id, public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.delete_message, (user_id, message_id, key))
 
 # node.wsgi
@@ -1993,11 +2050,12 @@ def read_post_list(c, user_id, session_id,
                    start_time, end_time, max_records, order, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     read_key, revoke_date = load_group_key(c, user_id, group_id, owner_id, node_name, 'read', passphrase)
     pow_args = load_group_proof_of_work_args(c, user_id, group_id, owner_id, node_name, 'read')
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_post_list, (group_id, owner_id,
                                 start_time, end_time, max_records, order,
                                 read_key, pow_args))
@@ -2014,6 +2072,7 @@ def make_post(c, user_id, session_id, node_name, group_id, owner_id, data,
 
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     post_key, revoke_date = load_group_key(c, user_id, group_id, owner_id, node_name, 'post', passphrase)
     pow_args = load_group_proof_of_work_args(c, user_id, group_id, owner_id, node_name, 'post')
@@ -2029,7 +2088,7 @@ def make_post(c, user_id, session_id, node_name, group_id, owner_id, data,
     else:
         public_data = data
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.make_post, (group_id, owner_id, public_data, post_key, pow_args))
     
 
@@ -2040,11 +2099,12 @@ def read_post(c, user_id, session_id, node_name, group_id, owner_id, post_id, pa
 
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     read_key, revoke_date = load_group_key(c, user_id, group_id, owner_id, node_name, 'read', passphrase)
     pow_args = load_group_proof_of_work_args(c, user_id, group_id, owner_id, node_name, 'read')
 
-    resp = handle_connection_exceptions(
+    resp = handle_connection_exceptions(node_obj,
             cl.read_post, (group_id, owner_id, post_id, read_key, pow_args))
 
     if resp['status'] != 'ok':
@@ -2104,11 +2164,12 @@ def read_post(c, user_id, session_id, node_name, group_id, owner_id, post_id, pa
 def delete_post(c, user_id, session_id, node_name, group_id, owner_id, post_id, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     delete_key, revoke_date = load_group_key(c, user_id, group_id, owner_id, node_name, 'delete', passphrase)
     pow_args = load_group_proof_of_work_args(c, user_id, group_id, owner_id, node_name, 'delete')
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.delete_post, (group_id, owner_id, post_id, delete_key, pow_args))
 
 
@@ -2120,20 +2181,22 @@ def change_user_quota(c, user_id, session_id,
                       public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.change_user_quota, (user_id, new_size, user_class, auth_token, key))
 
 
 def read_user_quota(c, user_id, session_id, node_name, public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_user_quota, (user_id, key))
 
 
@@ -2142,9 +2205,10 @@ def read_user_quota(c, user_id, session_id, node_name, public_key_hash, passphra
 def query_user(c, user_id, session_id, node_name, other_user_id):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.query_user, (other_user_id,))
 
 
@@ -2159,10 +2223,11 @@ def create_user(c, user_id, session_id,
                 user_class, auth_token):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     pub_key, revoke_date = load_public_user_key(c, user_id, node_name, public_key_hash)
 
-    resp = handle_connection_exceptions(
+    resp = handle_connection_exceptions(node_obj,
             cl.create_user, (user_id, pub_key, revoke_date,
                              default_message_access, when_mail_exhausted,
                              quota_size, mail_quota_size,
@@ -2177,20 +2242,22 @@ def create_user(c, user_id, session_id,
 def read_user(c, user_id, session_id, node_name, public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_user, (user_id, key))
 
 
 def delete_user(c, user_id, session_id, node_name, public_key_hash, passphrase=None):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
     key, revoke_date = load_user_key(c, user_id, node_name, public_key_hash, passphrase)
 
-    resp = handle_connection_exceptions(
+    resp = handle_connection_exceptions(node_obj,
             cl.delete_user, (user_id, key))
 
     return resp
@@ -2201,9 +2268,10 @@ def delete_user(c, user_id, session_id, node_name, public_key_hash, passphrase=N
 def read_quota_available(c, user_id, session_id, node_name, user_class):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_quota_available, (user_class,))
 
 
@@ -2212,9 +2280,10 @@ def read_quota_available(c, user_id, session_id, node_name, user_class):
 def read_version(c, user_id, session_id, node_name):
     assert_session_id(c, user_id, session_id)
     conn, url, real_node_name = get_node_connection(c, user_id, node_name)
+    node_obj = {'node_name': node_name, 'url': url, 'real_node_name': real_node_name}
     cl = client.Client(conn, real_node_name, show_traffic)
 
-    return handle_connection_exceptions(
+    return handle_connection_exceptions(node_obj,
             cl.read_version, ())
 
 

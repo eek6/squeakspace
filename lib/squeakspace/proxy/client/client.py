@@ -355,14 +355,15 @@ class Client:
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]
     
-    def set_node_addr(self, user_id, session_id, node_name, url, real_node_name):
+    def set_node_addr(self, user_id, session_id, node_name, url, real_node_name, fingerprint=None):
     
         method = 'POST'
         path = '/local/node-addr'
         body = uc.encode(
                 {'node_name' : node_name,
                  'url' : url,
-                 'real_node_name' : real_node_name})
+                 'real_node_name' : real_node_name,
+                 'fingerprint' : fingerprint})
         cookies = co.SimpleCookie({'user_id' : user_id, 'session_id' : session_id})
     
         return self.send_and_getter.send_and_get(self.conn, method, path, body=body, cookies=cookies)[0]

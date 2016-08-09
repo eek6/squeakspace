@@ -242,19 +242,21 @@ class NodeAddrNotFoundException(SqueakClientException):
                 'node_name' : self.node_name}
 
 
-class ConnectionException(SqueakClientException):
+class BadConnectionException(SqueakClientException):
     type = ex.SqueakStatusCodes.server_error
 
-    def __init__(self, exception_type, exception_str):
+    def __init__(self, exception_type, exception_str, node):
         self.exception_type = exception_type
         self.exception_str = exception_str
+        self.node = node
 
     def dict(self):
         return {'status' : 'error',
                 'error_code' : self.type,
-                'reason' : 'connection',
+                'reason' : 'bad connection',
                 'exception_type' : self.exception_type,
-                'exception_str' : self.exception_str}
+                'exception_str' : self.exception_str,
+                'node' : node}
 
 
 
@@ -353,4 +355,37 @@ class PrivateUserKeyNotAllowedException(SqueakClientException):
                 'reason' : 'private user key not allowed',
                 'public_key_hash' : self.public_key_hash}
 
+
+class BadNodeFingerprintException(SqueakClientException):
+    type = ex.SqueakStatusCodes.server_error
+
+    def __init__(self, fingerprint_type, expected_fingerprint, peer_fingerprint, node):
+        self.fingerprint_type = fingerprint_type
+        self.expected_fingerprint = expected_fingerprint
+        self.peer_fingerprint = peer_fingerprint
+        self.node = node
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type,
+                'reason' : 'bad node fingerprint',
+                'fingerprint_type' : self.fingerprint_type,
+                'expected_fingerprint' : self.expected_fingerprint,
+                'peer_fingerprint' : self.peer_fingerprint,
+                'node' : self.node}
+
+
+class InvalidFingerprintException(SqueakClientException):
+    type = ex.SqueakStatusCodes.bad_request
+
+    def __init__(self, fingerprint, fault):
+        self.fingerprint = fingerprint
+        self.fault = fault
+
+    def dict(self):
+        return {'status' : 'error',
+                'error_code' : self.type,
+                'reason' : 'invalid fingerprint',
+                'fingerprint' : self.fingerprint,
+                'fault' : self.fault}
 

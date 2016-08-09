@@ -280,6 +280,7 @@ local/node-addr.wsgi
   node_name
   url
   real_node_name
+  fingerprint -- sha1 or sha256 hash of der cert, or null.
 
 
   DELETE -- remove a node address entry

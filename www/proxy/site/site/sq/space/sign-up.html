@@ -10,13 +10,16 @@ Sign Up
 
 <script type="text/javascript" src="/lib/jquery-1.11.3.js"></script>
 <script type="text/javascript" src="/lib/squeakclient-0.0.0.js"></script>
+<script type="text/javascript" src="/lib/querystring-0.0.0.js"></script>
 <script type="text/javascript" src="/site/sq/space/site-util.js"></script>
 <script type="text/javascript">
+
+
+params = querystring.load();
 
 function say(mesg) {
     $('#message').text(mesg);
 }
-
 
 function sign_up() {
     var user_id = $('#user-id').val(),
@@ -24,6 +27,7 @@ function sign_up() {
         node_name = $('#node-nickname').val(),
         real_node_name = $('#real-node-name').val(),
         node_address = $('#node-address').val(),
+        node_fingerprint = $('#node-fingerprint').val(),
         user_class = $('#user-class').val(),
         auth_token = $('#auth-token').val();
 
@@ -43,7 +47,7 @@ function sign_up() {
     } else {
         var transaction = new SignUpTransaction(
                     user_id, password,
-                    node_name, real_node_name, node_address,
+                    node_name, real_node_name, node_address, node_fingerprint,
                     user_class, auth_token);
 
         transaction.start();
@@ -52,7 +56,7 @@ function sign_up() {
 
 function SignUpTransaction(
         user_id, password,
-        node_name, real_node_name, node_address,
+        node_name, real_node_name, node_address, node_fingerprint,
         user_class, auth_token) {
 
     this.state = null;
@@ -62,6 +66,7 @@ function SignUpTransaction(
     this.node_name = node_name;
     this.real_node_name = real_node_name;
     this.node_address = node_address;
+    this.node_fingerprint = node_fingerprint;
     this.user_class = user_class;
     this.auth_token = auth_token;
 
@@ -256,7 +261,8 @@ SignUpTransaction.prototype.check_node_address = function() {
                     var addr = resp.addr;
 
                     if (addr.url === trans.node_address && addr.real_node_name === trans.real_node_name) {
-                        trans.read_node_version();
+                        //trans.read_node_version();
+                        trans.assign_node_address(); // repeat step anyways, due to fingerprint
                     } else {
                         trans.handle_error({status: 'error', reason: 'node addr conflict'});
                     }
@@ -278,7 +284,8 @@ SignUpTransaction.prototype.assign_node_address = function() {
     squeakclient.local.set_node_addr(
             {node_name: trans.node_name,
              url: trans.node_address,
-             real_node_name: trans.real_node_name},
+             real_node_name: trans.real_node_name,
+             fingerprint: trans.node_fingerprint},
             function(resp, textStatus) {
                 debug(resp);
                 if (resp.status === 'ok') {
@@ -722,6 +729,16 @@ SignUpTransaction.prototype.done = function() {
 };
 
 
+window.onload = function() {
+    if (params !== null) {
+        $('#real-node-name').val(params.real_node_name);
+        $('#node-address').val(params.node_address);
+        $('#node-fingerprint').val(params.node_fingerprint);
+        $('#user-class').val(params.user_class);
+        $('#auth-token').val(params.auth_token);
+    }
+};
+
 
 </script>
 </head>
@@ -733,32 +750,14 @@ SignUpTransaction.prototype.done = function() {
 </div>
 
 <div>
-<label>Username:
-<input id="user-id">
-</label><br/>
-<label>Password:
-<input id="password" type="password">
-</label><br/>
-<label>
-Node Name:
-<input id="real-node-name">
-</label><br/>
-<label>
-Node Address:
-<input id="node-address">
-</label><br/>
-<label>
-Node Nickname:
-<input id="node-nickname">
-</label><br/>
-<label>
-User Class:
-<input id="user-class">
-</label><br/>
-<label>
-Auth Token:
-<input id="auth-token">
-</label>
+<label>Username: <input id="user-id"> </label><br/>
+<label>Password: <input id="password" type="password"> </label><br/>
+<label>Node Name: <input id="real-node-name"> </label><br/>
+<label>Node Address: <input id="node-address"> </label><br/>
+<label>Node Fingerprint: <input id="node-fingerprint"> </label><br/>
+<label>Node Nickname: <input id="node-nickname"> </label><br/>
+<label>User Class: <input id="user-class"> </label><br/>
+<label>Auth Token: <input id="auth-token"> </label>
 </div>
 <button id="sign-up-button" onclick="sign_up();">sign up</button>
 
