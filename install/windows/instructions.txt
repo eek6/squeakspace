@@ -1,0 +1,13 @@
+Installation Instructions for Windows:
+
+1. Download python 2.7. Download the installer for Windows
+   32-bit or 64-bit here: https://www.python.org/downloads/release/python-2712/
+
+2. Run the file run_after_python_installed.bat. It will install the needed python libraries.
+
+3. You are set. Click on launch_client.py to start the local webserver and
+   open http://localhost:12323 in a web browser.
+   
+
+If these instructions didn't work, email me: eek@safe-mail.net. I'll fix them.
+

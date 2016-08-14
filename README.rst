@@ -80,9 +80,9 @@ What is it written in?
 The servers are written in python and use WSGI.
 I didn't use any framework. Since the servers only generate
 JSON and serve static files, it didn't seem necessary.
-I've been using `apache2 <https://httpd.apache.org/>` with
-`mod_wsgi <https://modwsgi.readthedocs.io/en/develop/>`. 
-I incorporated `cherrypy <http://cherrypy.org/>` as an alternative
+I've been using `apache2 <https://httpd.apache.org/>`_ with
+`mod_wsgi <https://modwsgi.readthedocs.io/en/develop/>`_. 
+I incorporated `cherrypy <http://cherrypy.org/>`_ as an alternative
 minimal web server for the local client. Both servers
 use sqlite3 for their database.
 
@@ -95,21 +95,23 @@ I have only tested on Linux so far but it is portable in theory:
 
 * Clone this repository or download it as a zip file using
   the button at the top of this page. 
-* Install `Python 2.7 <https://www.python.org/download/releases/2.7/>`.
-* Install the python packages
-  `pyCrypto <https://www.dlitz.net/software/pycrypto/>`
-  and `cherrypy <http://cherrypy.org/>` if they aren't already included.
-* Now you can start the local web server by running the script
-  ``config/cherrypy/proxy/server.py``. Once that is running,
-  open a web browser and go to ``http://localhost:12323``.
-  If that works then click the ``sq/space`` link to get to the more
+* Read the ``instructions.txt`` file under the install directory
+  for your platform. It will tell you to install a recent
+  version of `python 2.7 <https://www.python.org/download/releases/2.7/>`_,
+  and to run a script that will install the needed python libraries.
+* Now to run the client, run or click on ``launch_client.py`` at
+  the root of the repository. This script will start the local
+  web server proxy using cherrypy if it isn't already running and open
+  ``http://localhost:12323`` in a webbrowser.
+  Click the ``sq/space`` link to get to the more
   usable version of the site and sign up. You'll need the name and server
   address of a node to create an account on. 
   I haven't set up a node yet, but once I do I'll post the info here.
 
 
-If you can install `apache <https://httpd.apache.org/>`, the client also
-runs on that using `mod_wsgi <https://modwsgi.readthedocs.io/en/develop/>`.
+If you can install `apache <https://httpd.apache.org/>`_, the client also
+runs on that using `mod_wsgi <https://modwsgi.readthedocs.io/en/develop/>`_.
+See ``doc/proxy_config.tt`` for help creating the apache configuration file.
 
 
 How do I run a node?
@@ -119,8 +121,8 @@ It's possible to use the instructions above and run the node with cherrypy
 by executing the script ``config/cherrypy/server/server.py`` but I don't
 recommend this, since the node faces the outside internet.
 
-* Install `apache <https://httpd.apache.org/>` and 
-  `mod_wsgi <https://modwsgi.readthedocs.io/en/develop/>`.
+* Install `apache <https://httpd.apache.org/>`_ and 
+  `mod_wsgi <https://modwsgi.readthedocs.io/en/develop/>`_.
 * Create the apache config file for the node site using
   ``doc/server_config.tt``.
 * Edit ``config/server/config.py``. Set ``node_name``
@@ -133,10 +135,15 @@ recommend this, since the node faces the outside internet.
 Things to do
 ------------
 
-* Make an easy installation process
+* Make a one-click installation process
 * Make the site look better
 * Get a node running so people can start testing it out
 * Security code review
 
 
-Send questions and comments to eek@safe-mail.net
+Contact
+-------
+
+Github thinks my browser is a spambot, so I don't log in here.
+You can email me at eek@safe-mail.net. I am also eek6 at reddit.
+

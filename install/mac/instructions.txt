@@ -1,0 +1,14 @@
+Installation Instructions for Mac:
+
+1. Your Mac likely already has python 2.7 installed, but it might be out of date.
+   You need an installation that has pip. Just download the latest version of
+   python 2.7 here: https://www.python.org/downloads/release/python-2712/
+
+2. Run the file run_after_python_installed.sh. It will install the needed python libraries.
+
+3. You are set. Click on launch_client.py to start the local webserver and
+   open http://localhost:12323 in a web browser.
+   
+
+If these instructions didn't work, email me: eek@safe-mail.net. I'll fix them.
+

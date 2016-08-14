@@ -1,0 +1,14 @@
+Installation Instructions for Linux (Ubuntu or Debian):
+
+1. Just run sudo install.sh. It will use your package manager to:
+
+  * Install python2.7 if it isn't already there.
+  * Install pip if it isn't already there.
+  * Use pip to install the needed python libraries.
+
+2. You are set. Click on launch_client.py to start the local webserver and
+   open http://localhost:12323 in a web browser.
+   
+
+If these instructions didn't work, email me: eek@safe-mail.net. I'll fix them.
+
